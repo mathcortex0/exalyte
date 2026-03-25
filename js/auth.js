@@ -1,6 +1,13 @@
 // Authentication Functions
 
 async function checkAuth() {
+    const supabase = getSupabase();
+    if (!supabase) {
+        console.error('Supabase not ready');
+        setTimeout(checkAuth, 500);
+        return;
+    }
+    
     showLoading(true);
     try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -23,6 +30,9 @@ async function checkAuth() {
 }
 
 async function loadProfile() {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    
     try {
         const { data, error } = await supabase
             .from('profiles')
@@ -55,6 +65,12 @@ async function loadProfile() {
 }
 
 async function login(email, password) {
+    const supabase = getSupabase();
+    if (!supabase) {
+        showToast('System initializing, please wait...', 'error');
+        return;
+    }
+    
     if (!email || !password) {
         showToast('Please enter email and password', 'error');
         return;
@@ -79,6 +95,12 @@ async function login(email, password) {
 }
 
 async function loginWithGoogle() {
+    const supabase = getSupabase();
+    if (!supabase) {
+        showToast('System initializing, please wait...', 'error');
+        return;
+    }
+    
     showLoading(true);
     try {
         const { data, error } = await supabase.auth.signInWithOAuth({
@@ -96,6 +118,12 @@ async function loginWithGoogle() {
 }
 
 async function signup(email, password, fullName) {
+    const supabase = getSupabase();
+    if (!supabase) {
+        showToast('System initializing, please wait...', 'error');
+        return;
+    }
+    
     if (!email || !password || !fullName) {
         showToast('Please fill all fields', 'error');
         return;
@@ -129,6 +157,9 @@ async function signup(email, password, fullName) {
 }
 
 async function logout() {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    
     showLoading(true);
     try {
         const { error } = await supabase.auth.signOut();
