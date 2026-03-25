@@ -1,6 +1,12 @@
 // Exam Functions
 
 async function startExam(examId) {
+    const supabase = getSupabase();
+    if (!supabase) {
+        showToast('System initializing, please wait...', 'error');
+        return;
+    }
+    
     showLoading(true);
     
     try {
@@ -140,14 +146,14 @@ function renderExam() {
                 <div class="question-card bg-white rounded-xl shadow-md p-6" data-qid="${q.id}">
                     <div class="mb-4">
                         <h3 class="font-semibold text-gray-800">Question ${idx + 1}</h3>
-                        <p class="text-gray-700 mt-2">${q.question_text}</p>
+                        <p class="text-gray-700 mt-2">${escapeHtml(q.question_text)}</p>
                         ${q.image_url ? `<img src="${q.image_url}" class="mt-3 max-w-full rounded-lg max-h-48 object-contain">` : ''}
                     </div>
                     <div class="space-y-2">
                         ${['a', 'b', 'c', 'd'].map(opt => `
                             <button class="option-btn w-full text-left p-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition" data-opt="${opt}">
                                 <span class="font-semibold inline-block w-8">${opt.toUpperCase()}.</span>
-                                ${q[`option_${opt}`]}
+                                ${escapeHtml(q[`option_${opt}`])}
                             </button>
                         `).join('')}
                     </div>
@@ -196,6 +202,12 @@ function renderExam() {
 }
 
 async function submitExam() {
+    const supabase = getSupabase();
+    if (!supabase) {
+        showToast('System error, please refresh', 'error');
+        return;
+    }
+    
     if (window.timerInterval) clearInterval(window.timerInterval);
     showLoading(true);
     
@@ -296,6 +308,13 @@ function showResult(result) {
     `;
     
     document.getElementById('back-dashboard-btn').addEventListener('click', loadDashboard);
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Export functions
