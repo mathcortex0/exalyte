@@ -1,183 +1,102 @@
-// Authentication Functions
-
 async function checkAuth() {
-    const supabase = getSupabase();
-    if (!supabase) {
-        console.error('Supabase not ready');
-        setTimeout(checkAuth, 500);
-        return;
-    }
-    
     showLoading(true);
-    try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        
-        if (user) {
-            window.currentUser = user;
-            await loadProfile();
-            loadDashboard();
-        } else {
-            window.currentUser = null;
-            window.currentProfile = null;
-            showAuth();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (user) {
+        currentUser = user;
+        await loadProfile();
+        if (window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname === '') {
+            window.location.href = 'dashboard.html';
         }
-    } catch (error) {
-        console.error('Auth check error:', error);
-        showAuth();
-    } finally {
-        showLoading(false);
+    } else {
+        if (!window.location.pathname.includes('index.html') && window.location.pathname !== '/') {
+            window.location.href = 'index.html';
+        }
     }
+    showLoading(false);
+}
+
+async function checkAuthAndRedirect() {
+    showLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        window.location.href = 'dashboard.html';
+    }
+    showLoading(false);
 }
 
 async function loadProfile() {
-    const supabase = getSupabase();
-    if (!supabase) return;
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
     
-    try {
-        const { data, error } = await supabase
+    if (data) {
+        currentProfile = data;
+    } else {
+        const { data: newProfile } = await supabase
             .from('profiles')
-            .select('*')
-            .eq('id', window.currentUser.id)
+            .insert({
+                id: currentUser.id,
+                email: currentUser.email,
+                full_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+                role: currentUser.email === ADMIN_EMAIL ? 'admin' : 'user'
+            })
+            .select()
             .single();
-        
-        if (data) {
-            window.currentProfile = data;
-        } else {
-            // Create profile if doesn't exist
-            const { data: newProfile, error: insertError } = await supabase
-                .from('profiles')
-                .insert({
-                    id: window.currentUser.id,
-                    email: window.currentUser.email,
-                    full_name: window.currentUser.user_metadata?.full_name || window.currentUser.email.split('@')[0],
-                    role: window.currentUser.email === ADMIN_EMAIL ? 'admin' : 'user'
-                })
-                .select()
-                .single();
-            
-            if (newProfile) {
-                window.currentProfile = newProfile;
-            }
-        }
-    } catch (error) {
-        console.error('Error loading profile:', error);
+        currentProfile = newProfile;
     }
 }
 
 async function login(email, password) {
-    const supabase = getSupabase();
-    if (!supabase) {
-        showToast('System initializing, please wait...', 'error');
-        return;
-    }
-    
     if (!email || !password) {
         showToast('Please enter email and password', 'error');
         return;
     }
-    
     showLoading(true);
-    try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-        
-        if (error) throw error;
-        
-        showToast('Login successful!', 'success');
-        await checkAuth();
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        showLoading(false);
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    showLoading(false);
+    if (error) showToast(error.message, 'error');
+    else window.location.href = 'dashboard.html';
 }
 
 async function loginWithGoogle() {
-    const supabase = getSupabase();
-    if (!supabase) {
-        showToast('System initializing, please wait...', 'error');
-        return;
-    }
-    
     showLoading(true);
-    try {
-        const { data, error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin
-            }
-        });
-        
-        if (error) throw error;
-    } catch (error) {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin + '/dashboard.html' }
+    });
+    if (error) {
         showToast(error.message, 'error');
         showLoading(false);
     }
 }
 
 async function signup(email, password, fullName) {
-    const supabase = getSupabase();
-    if (!supabase) {
-        showToast('System initializing, please wait...', 'error');
-        return;
-    }
-    
     if (!email || !password || !fullName) {
         showToast('Please fill all fields', 'error');
         return;
     }
-    
-    if (!validateEmail(email)) {
-        showToast('Please enter a valid email', 'error');
-        return;
-    }
-    
     showLoading(true);
-    try {
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: fullName
-                }
-            }
-        });
-        
-        if (error) throw error;
-        
-        showToast('Signup successful! Please check your email for verification.', 'success');
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        showLoading(false);
-    }
+    const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { full_name: fullName } }
+    });
+    showLoading(false);
+    if (error) showToast(error.message, 'error');
+    else showToast('Signup successful! Please verify your email.', 'success');
 }
 
 async function logout() {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    
     showLoading(true);
-    try {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-        
-        window.currentUser = null;
-        window.currentProfile = null;
-        showAuth();
-        showToast('Logged out successfully', 'success');
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        showLoading(false);
-    }
+    await supabase.auth.signOut();
+    showLoading(false);
+    window.location.href = 'index.html';
 }
 
-// Export functions
 window.checkAuth = checkAuth;
+window.checkAuthAndRedirect = checkAuthAndRedirect;
 window.login = login;
 window.loginWithGoogle = loginWithGoogle;
 window.signup = signup;
