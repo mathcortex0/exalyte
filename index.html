@@ -11,89 +11,61 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
     <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
-        * { font-family: 'Inter', sans-serif; }
-        
-        .sticky-timer {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.95);
-        }
-        
-        .option-btn {
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        
-        .option-btn.selected {
-            background-color: #dbeafe;
-            border-color: #3b82f6;
-            border-width: 2px;
-        }
-        
-        .timer-warning {
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        }
-        
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        * { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+        .loading { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; }
+        .loading.active { display: flex; }
+        .toast { position: fixed; bottom: 20px; right: 20px; z-index: 1000; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .option-btn { transition: all 0.2s; cursor: pointer; }
+        .option-btn.selected { background-color: #dbeafe; border-color: #3b82f6; border-width: 2px; }
+        .timer-warning { animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     </style>
 </head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+<body class="bg-gray-100 min-h-screen">
+    <div class="loading" id="loading">
+        <div class="bg-white rounded-lg p-6">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p class="mt-3 text-gray-600">Loading...</p>
+        </div>
+    </div>
+    
     <div id="app" class="container mx-auto px-4 py-6 max-w-7xl"></div>
 
     <script>
-        // ============================================
-        // SUPABASE CONFIGURATION
-        // ============================================
+        // Supabase Configuration
         const SUPABASE_URL = 'https://pwprxidlohbzfsoxrnxs.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_hJTweaPJGWeaNPQxbBaEPw_jR0O9xhx';
-        const ADMIN_EMAIL = 'alamin05052008@gmail.com';
-        
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         
-        // ============================================
-        // APP STATE
-        // ============================================
+        // App State
         let currentUser = null;
         let currentProfile = null;
-        let currentView = 'auth';
         let currentExam = null;
         let currentQuestions = [];
         let userAnswers = {};
         let timerInterval = null;
         let examStartTime = null;
         
-        // ============================================
-        // UTILITY FUNCTIONS
-        // ============================================
+        // Helper Functions
+        function showLoading(show) {
+            const el = document.getElementById('loading');
+            if (show) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+        
+        function showToast(msg, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast bg-${type === 'success' ? 'green' : type === 'error' ? 'red' : 'blue'}-500 text-white px-6 py-3 rounded-lg shadow-lg`;
+            toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} mr-2"></i>${msg}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+        
         function formatTime(seconds) {
             if (!seconds || seconds < 0) return '00:00';
             const mins = Math.floor(seconds / 60);
@@ -105,85 +77,35 @@
             return new Date(date).toLocaleString();
         }
         
-        function showToast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast bg-${type === 'success' ? 'green' : type === 'error' ? 'red' : 'blue'}-500 text-white px-6 py-3 rounded-lg shadow-lg`;
-            toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} mr-2"></i>${message}`;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-        
-        function showLoading(show) {
-            const overlay = document.getElementById('loading-overlay') || (() => {
-                const div = document.createElement('div');
-                div.id = 'loading-overlay';
-                div.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center';
-                div.innerHTML = '<div class="bg-white rounded-lg p-8"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>';
-                document.body.appendChild(div);
-                return div;
-            })();
-            
-            if (show) {
-                overlay.classList.remove('hidden');
-                overlay.classList.add('flex');
-            } else {
-                overlay.classList.add('hidden');
-                overlay.classList.remove('flex');
-            }
-        }
-        
-        // ============================================
-        // AUTHENTICATION
-        // ============================================
+        // Auth Functions
         async function checkAuth() {
-            const { data: { user }, error } = await supabase.auth.getUser();
+            showLoading(true);
+            const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 currentUser = user;
                 await loadProfile();
                 loadDashboard();
             } else {
-                currentUser = null;
                 showAuth();
             }
+            showLoading(false);
         }
         
         async function loadProfile() {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', currentUser.id)
                 .single();
-            
-            if (data) {
-                currentProfile = data;
-            } else if (error && error.code === 'PGRST116') {
-                // Create profile if doesn't exist
-                const { data: newProfile, error: insertError } = await supabase
-                    .from('profiles')
-                    .insert({
-                        id: currentUser.id,
-                        email: currentUser.email,
-                        full_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
-                        display_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
-                        role: currentUser.email === ADMIN_EMAIL ? 'admin' : 'user'
-                    })
-                    .select()
-                    .single();
-                
-                if (newProfile) currentProfile = newProfile;
-            }
+            currentProfile = data;
         }
         
         async function login(email, password) {
             showLoading(true);
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             showLoading(false);
-            if (error) {
-                showToast(error.message, 'error');
-            } else {
-                showToast('Login successful!', 'success');
-                checkAuth();
-            }
+            if (error) showToast(error.message, 'error');
+            else { showToast('Login successful!'); checkAuth(); }
         }
         
         async function loginWithGoogle() {
@@ -203,11 +125,8 @@
                 options: { data: { full_name: fullName } }
             });
             showLoading(false);
-            if (error) {
-                showToast(error.message, 'error');
-            } else {
-                showToast('Signup successful! Please verify your email.', 'success');
-            }
+            if (error) showToast(error.message, 'error');
+            else showToast('Signup successful! Please verify your email.');
         }
         
         async function logout() {
@@ -215,130 +134,90 @@
             currentUser = null;
             currentProfile = null;
             showAuth();
-            showToast('Logged out', 'success');
+            showToast('Logged out');
         }
         
-        // ============================================
-        // DASHBOARD
-        // ============================================
+        // Dashboard
         async function loadDashboard() {
-            currentView = 'dashboard';
             const isAdmin = currentProfile?.role === 'admin';
-            const displayName = currentProfile?.display_name || currentProfile?.full_name || currentUser.email.split('@')[0];
+            const name = currentProfile?.full_name || currentUser.email.split('@')[0];
             
-            // Load user stats
-            const { data: stats } = await supabase.rpc('get_user_stats', { user_uuid: currentUser.id });
-            const userStats = stats?.[0] || { total_exams: 0, average_score: 0, best_score: 0 };
-            
-            // Load exams
+            // Get exams
             const { data: exams } = await supabase
                 .from('exams')
                 .select('*')
                 .gte('end_time', new Date().toISOString())
                 .order('created_at', { ascending: false });
             
-            // Load user's completed exams
+            // Get user's completed exams
             const { data: completed } = await supabase
-                .from('user_exam_attempts')
+                .from('results')
                 .select('exam_id')
                 .eq('user_id', currentUser.id);
             
-            const completedExamIds = new Set(completed?.map(c => c.exam_id) || []);
+            const completedIds = new Set(completed?.map(c => c.exam_id) || []);
             
             const app = document.getElementById('app');
             app.innerHTML = `
-                <div class="space-y-6">
-                    <div class="bg-white rounded-xl shadow-lg p-6">
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div>
-                                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Welcome, ${displayName}!</h1>
-                                <p class="text-gray-600">Ready to test your knowledge?</p>
-                            </div>
-                            <div class="flex gap-3 flex-wrap">
-                                <button id="profile-btn" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
-                                    <i class="fas fa-user mr-2"></i>Profile
-                                </button>
-                                <button id="leaderboard-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                                    <i class="fas fa-trophy mr-2"></i>Leaderboard
-                                </button>
-                                ${isAdmin ? `
-                                    <button id="admin-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                                        <i class="fas fa-cog mr-2"></i>Admin
-                                    </button>
-                                ` : ''}
-                                <button id="history-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                                    <i class="fas fa-history mr-2"></i>History
-                                </button>
-                                <button id="logout-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
-                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                                </button>
-                            </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <div class="flex flex-wrap justify-between items-center gap-4">
+                        <div>
+                            <h1 class="text-2xl font-bold">Welcome, ${name}!</h1>
+                            <p class="text-gray-600">Ready to test your knowledge?</p>
                         </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-                            <i class="fas fa-chart-line text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">Total Exams</p>
-                            <p class="text-3xl font-bold">${userStats.total_exams}</p>
-                        </div>
-                        <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
-                            <i class="fas fa-percent text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">Average Score</p>
-                            <p class="text-3xl font-bold">${userStats.average_score}%</p>
-                        </div>
-                        <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
-                            <i class="fas fa-trophy text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">Best Score</p>
-                            <p class="text-3xl font-bold">${userStats.best_score}%</p>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-white rounded-xl shadow-lg p-6">
-                        <h2 class="text-xl font-bold text-gray-800 mb-4">Available Exams</h2>
-                        <div id="exams-list" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            ${exams?.length ? exams.map(exam => `
-                                <div class="border rounded-xl p-5 hover:shadow-lg transition">
-                                    <div class="flex justify-between items-start mb-3">
-                                        <h3 class="text-lg font-bold text-gray-800">${exam.title}</h3>
-                                        ${exam.is_paid ? '<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full"><i class="fas fa-crown mr-1"></i>Premium</span>' : '<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">Free</span>'}
-                                    </div>
-                                    <p class="text-gray-600 text-sm mb-3">${exam.description || 'No description'}</p>
-                                    <div class="space-y-1 text-sm text-gray-500">
-                                        <div><i class="fas fa-clock mr-2"></i>${exam.duration} minutes</div>
-                                        <div><i class="fas fa-calendar mr-2"></i>${formatDate(exam.start_time)}</div>
-                                    </div>
-                                    ${completedExamIds.has(exam.id) ? `
-                                        <div class="mt-4 text-green-600 text-sm"><i class="fas fa-check-circle mr-1"></i>Completed</div>
-                                    ` : `
-                                        <button onclick="startExam('${exam.id}')" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition">
-                                            Start Exam
-                                        </button>
-                                    `}
-                                </div>
-                            `).join('') : '<div class="col-span-full text-center py-8 text-gray-500">No exams available</div>'}
+                        <div class="flex gap-3">
+                            <button id="leaderboardBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                <i class="fas fa-trophy mr-2"></i>Leaderboard
+                            </button>
+                            ${isAdmin ? `
+                                <button id="adminBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                                    <i class="fas fa-cog mr-2"></i>Admin
+                                </button>
+                            ` : ''}
+                            <button id="historyBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                <i class="fas fa-history mr-2"></i>History
+                            </button>
+                            <button id="logoutBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </button>
                         </div>
                     </div>
                 </div>
+                
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    ${exams?.length ? exams.map(exam => `
+                        <div class="bg-white rounded-xl shadow-md p-5 hover:shadow-lg transition">
+                            <div class="flex justify-between items-start mb-3">
+                                <h3 class="text-lg font-bold">${exam.title}</h3>
+                                ${exam.is_paid ? '<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full"><i class="fas fa-crown"></i> Premium</span>' : '<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">Free</span>'}
+                            </div>
+                            <p class="text-gray-600 text-sm mb-3">${exam.description || 'No description'}</p>
+                            <div class="text-sm text-gray-500 space-y-1">
+                                <div><i class="fas fa-clock mr-2"></i>${exam.duration} minutes</div>
+                                <div><i class="fas fa-calendar mr-2"></i>${formatDate(exam.start_time)}</div>
+                            </div>
+                            ${completedIds.has(exam.id) ? 
+                                '<div class="mt-4 text-green-600 text-sm"><i class="fas fa-check-circle"></i> Completed</div>' :
+                                `<button onclick="startExam('${exam.id}')" class="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">Start Exam</button>`
+                            }
+                        </div>
+                    `).join('') : '<div class="col-span-full text-center py-8 text-gray-500">No exams available</div>'}
+                </div>
             `;
             
-            // Attach event listeners
-            document.getElementById('profile-btn')?.addEventListener('click', showProfile);
-            document.getElementById('leaderboard-btn')?.addEventListener('click', showLeaderboard);
-            document.getElementById('admin-btn')?.addEventListener('click', showAdminPanel);
-            document.getElementById('history-btn')?.addEventListener('click', showHistory);
-            document.getElementById('logout-btn')?.addEventListener('click', logout);
+            document.getElementById('leaderboardBtn')?.addEventListener('click', showLeaderboard);
+            document.getElementById('adminBtn')?.addEventListener('click', showAdminPanel);
+            document.getElementById('historyBtn')?.addEventListener('click', showHistory);
+            document.getElementById('logoutBtn')?.addEventListener('click', logout);
         }
         
-        // ============================================
-        // EXAM SYSTEM
-        // ============================================
+        // Start Exam
         window.startExam = async (examId) => {
             showLoading(true);
             
-            // Check if already attempted
+            // Check if already taken
             const { data: existing } = await supabase
-                .from('user_exam_attempts')
+                .from('results')
                 .select('id')
                 .eq('user_id', currentUser.id)
                 .eq('exam_id', examId)
@@ -350,7 +229,7 @@
                 return;
             }
             
-            // Get exam details
+            // Get exam
             const { data: exam } = await supabase
                 .from('exams')
                 .select('*')
@@ -379,18 +258,14 @@
                 }
             }
             
-            // Check exam timing
+            // Check timing
             const now = new Date();
-            const startTime = new Date(exam.start_time);
-            const endTime = new Date(exam.end_time);
-            
-            if (now < startTime) {
-                showToast(`Exam starts on ${formatDate(startTime)}`, 'error');
+            if (now < new Date(exam.start_time)) {
+                showToast(`Exam starts on ${formatDate(exam.start_time)}`, 'error');
                 showLoading(false);
                 return;
             }
-            
-            if (now > endTime) {
+            if (now > new Date(exam.end_time)) {
                 showToast('Exam has ended', 'error');
                 showLoading(false);
                 return;
@@ -421,12 +296,12 @@
             
             showLoading(false);
             renderExam();
-            startExamTimer(exam.duration * 60);
+            startTimer(exam.duration * 60);
         };
         
-        function startExamTimer(durationSeconds) {
+        function startTimer(duration) {
             if (timerInterval) clearInterval(timerInterval);
-            let timeLeft = durationSeconds;
+            let timeLeft = duration;
             
             timerInterval = setInterval(() => {
                 if (timeLeft <= 0) {
@@ -434,44 +309,42 @@
                     submitExam();
                 } else {
                     timeLeft--;
-                    const timerEl = document.getElementById('exam-timer');
+                    const timerEl = document.getElementById('timer');
                     if (timerEl) {
                         timerEl.textContent = formatTime(timeLeft);
                         if (timeLeft < 300) timerEl.classList.add('timer-warning', 'text-red-600');
                     }
                 }
             }, 1000);
-            window.examTimeLeft = timeLeft;
         }
         
         function renderExam() {
-            currentView = 'exam';
             const app = document.getElementById('app');
             app.innerHTML = `
-                <div class="sticky-timer bg-white shadow-lg rounded-lg mb-6 p-4">
+                <div class="sticky top-0 bg-white shadow-lg rounded-lg mb-6 p-4 z-10">
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-xl font-bold">${currentExam.title}</h2>
-                            <p class="text-sm text-gray-600">${currentExam.description}</p>
+                            <p class="text-sm text-gray-600">${currentExam.description || ''}</p>
                         </div>
                         <div class="text-right">
                             <div class="text-sm text-gray-600">Time Remaining</div>
-                            <div id="exam-timer" class="text-3xl font-mono font-bold text-blue-600">${formatTime(currentExam.duration * 60)}</div>
+                            <div id="timer" class="text-3xl font-mono font-bold text-blue-600">${formatTime(currentExam.duration * 60)}</div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="space-y-4 mb-24" id="questions-container">
+                <div class="space-y-4 mb-24">
                     ${currentQuestions.map((q, idx) => `
                         <div class="bg-white rounded-xl shadow-md p-6" data-qid="${q.id}">
                             <div class="mb-4">
-                                <h3 class="font-semibold text-gray-800">Question ${idx + 1}</h3>
-                                <p class="text-gray-700 mt-2">${q.question_text}</p>
-                                ${q.image_url ? `<img src="${q.image_url}" class="mt-3 max-w-full rounded-lg max-h-64 object-contain">` : ''}
+                                <h3 class="font-semibold">Question ${idx + 1}</h3>
+                                <p class="mt-2">${q.question_text}</p>
+                                ${q.image_url ? `<img src="${q.image_url}" class="mt-3 max-w-full rounded-lg max-h-48 object-contain">` : ''}
                             </div>
                             <div class="space-y-2">
                                 ${['a', 'b', 'c', 'd'].map(opt => `
-                                    <button class="option-btn w-full text-left p-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition" data-opt="${opt}">
+                                    <button class="option-btn w-full text-left p-3 rounded-lg border border-gray-300 hover:bg-gray-50" data-opt="${opt}">
                                         <span class="font-semibold inline-block w-8">${opt.toUpperCase()}.</span>
                                         ${q[`option_${opt}`]}
                                     </button>
@@ -484,9 +357,9 @@
                 <div class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
                     <div class="container mx-auto max-w-7xl flex justify-between items-center">
                         <div class="text-sm text-gray-600">
-                            Answered: <span id="answered-count">0</span> / ${currentQuestions.length}
+                            Answered: <span id="answered">0</span> / ${currentQuestions.length}
                         </div>
-                        <button id="submit-exam" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition">
+                        <button id="submitBtn" class="px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">
                             <i class="fas fa-check-circle mr-2"></i>Submit Exam
                         </button>
                     </div>
@@ -498,24 +371,23 @@
                 btn.addEventListener('click', (e) => {
                     const card = btn.closest('[data-qid]');
                     const qid = card.dataset.qid;
-                    const option = btn.dataset.opt;
+                    const opt = btn.dataset.opt;
                     
-                    userAnswers[qid] = option;
+                    userAnswers[qid] = opt;
                     
-                    // Update UI
-                    card.querySelectorAll('.option-btn').forEach(optBtn => {
-                        optBtn.classList.remove('selected', 'bg-blue-100', 'border-blue-500');
-                        if (optBtn.dataset.opt === option) {
-                            optBtn.classList.add('selected', 'bg-blue-100', 'border-blue-500');
+                    card.querySelectorAll('.option-btn').forEach(ob => {
+                        ob.classList.remove('selected', 'bg-blue-100', 'border-blue-500');
+                        if (ob.dataset.opt === opt) {
+                            ob.classList.add('selected', 'bg-blue-100', 'border-blue-500');
                         }
                     });
                     
-                    document.getElementById('answered-count').textContent = Object.keys(userAnswers).length;
+                    document.getElementById('answered').textContent = Object.keys(userAnswers).length;
                 });
             });
             
-            document.getElementById('submit-exam').addEventListener('click', () => {
-                if (confirm('Are you sure you want to submit?')) submitExam();
+            document.getElementById('submitBtn').addEventListener('click', () => {
+                if (confirm('Submit exam?')) submitExam();
             });
         }
         
@@ -524,8 +396,6 @@
             showLoading(true);
             
             const timeTaken = Math.floor((new Date() - examStartTime) / 1000);
-            
-            // Calculate score
             let correct = 0, wrong = 0, skipped = 0;
             
             currentQuestions.forEach(q => {
@@ -535,26 +405,21 @@
                 else wrong++;
             });
             
-            const totalQuestions = currentQuestions.length;
-            const percentage = (correct / totalQuestions * 100).toFixed(2);
+            const total = currentQuestions.length;
+            const percentage = (correct / total * 100).toFixed(2);
             const score = (correct * currentExam.marks_per_question) + (wrong * currentExam.negative_mark_per_wrong);
             
-            // Save result
-            const { data, error } = await supabase
-                .from('user_exam_attempts')
+            const { error } = await supabase
+                .from('results')
                 .insert({
                     user_id: currentUser.id,
                     exam_id: currentExam.id,
                     score: score,
-                    percentage: percentage,
                     correct_count: correct,
                     wrong_count: wrong,
-                    skipped_count: skipped,
                     time_taken: timeTaken,
                     answers: userAnswers
-                })
-                .select()
-                .single();
+                });
             
             showLoading(false);
             
@@ -565,17 +430,6 @@
             }
             
             // Show result
-            showResult({
-                score, percentage, correct, wrong, skipped,
-                total: totalQuestions,
-                timeTaken,
-                marksPerQuestion: currentExam.marks_per_question,
-                negativeMark: currentExam.negative_mark_per_wrong
-            });
-        }
-        
-        function showResult(result) {
-            currentView = 'result';
             const app = document.getElementById('app');
             app.innerHTML = `
                 <div class="max-w-2xl mx-auto">
@@ -588,234 +442,111 @@
                         <div class="p-8">
                             <div class="grid grid-cols-2 gap-4 mb-6">
                                 <div class="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div class="text-3xl font-bold text-blue-600">${result.score}</div>
-                                    <div class="text-sm text-gray-600">Total Score</div>
+                                    <div class="text-3xl font-bold text-blue-600">${score}</div>
+                                    <div class="text-sm text-gray-600">Score</div>
                                 </div>
                                 <div class="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div class="text-3xl font-bold text-green-600">${result.percentage}%</div>
+                                    <div class="text-3xl font-bold text-green-600">${percentage}%</div>
                                     <div class="text-sm text-gray-600">Percentage</div>
                                 </div>
                             </div>
-                            
                             <div class="space-y-3 mb-6">
-                                <div class="flex justify-between p-3 bg-green-50 rounded-lg">
-                                    <span><i class="fas fa-check-circle text-green-600 mr-2"></i>Correct</span>
-                                    <span class="font-bold">${result.correct}</span>
-                                </div>
-                                <div class="flex justify-between p-3 bg-red-50 rounded-lg">
-                                    <span><i class="fas fa-times-circle text-red-600 mr-2"></i>Wrong</span>
-                                    <span class="font-bold">${result.wrong}</span>
-                                </div>
-                                <div class="flex justify-between p-3 bg-yellow-50 rounded-lg">
-                                    <span><i class="fas fa-question-circle text-yellow-600 mr-2"></i>Skipped</span>
-                                    <span class="font-bold">${result.skipped}</span>
-                                </div>
-                                <div class="flex justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span><i class="fas fa-clock text-gray-600 mr-2"></i>Time Taken</span>
-                                    <span class="font-bold">${formatTime(result.timeTaken)}</span>
-                                </div>
+                                <div class="flex justify-between p-3 bg-green-50 rounded"><span>✅ Correct</span><span class="font-bold">${correct}</span></div>
+                                <div class="flex justify-between p-3 bg-red-50 rounded"><span>❌ Wrong</span><span class="font-bold">${wrong}</span></div>
+                                <div class="flex justify-between p-3 bg-yellow-50 rounded"><span>❓ Skipped</span><span class="font-bold">${skipped}</span></div>
+                                <div class="flex justify-between p-3 bg-gray-50 rounded"><span>⏱️ Time Taken</span><span class="font-bold">${formatTime(timeTaken)}</span></div>
                             </div>
-                            
-                            <button id="dashboard-btn" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition">
-                                <i class="fas fa-home mr-2"></i>Back to Dashboard
+                            <button onclick="loadDashboard()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
+                                Back to Dashboard
                             </button>
                         </div>
                     </div>
                 </div>
             `;
-            
-            document.getElementById('dashboard-btn').addEventListener('click', loadDashboard);
         }
         
-        // ============================================
-        // LEADERBOARD
-        // ============================================
+        // Leaderboard
         async function showLeaderboard() {
             showLoading(true);
-            const { data: leaderboard } = await supabase
-                .from('leaderboard_view')
-                .select('*')
-                .order('rank', { ascending: true })
+            const { data } = await supabase
+                .from('results')
+                .select('*, profiles(full_name, email), exams(title)')
+                .order('score', { ascending: false })
                 .limit(50);
-            
-            const { data: exams } = await supabase
-                .from('exams')
-                .select('id, title');
-            
-            showLoading(false);
-            
-            const app = document.getElementById('app');
-            app.innerHTML = `
-                <div class="bg-white rounded-xl shadow-xl overflow-hidden">
-                    <div class="bg-gradient-to-r from-yellow-500 to-orange-600 p-6 text-white">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <i class="fas fa-trophy text-4xl mb-2"></i>
-                                <h1 class="text-2xl font-bold">Leaderboard</h1>
-                            </div>
-                            <button id="back-btn" class="px-4 py-2 bg-white text-orange-600 rounded-lg hover:bg-gray-100 transition">
-                                <i class="fas fa-arrow-left mr-2"></i>Back
-                            </button>
-                        </div>
-                    </div>
-                    <div class="p-6">
-                        <select id="exam-filter" class="w-full md:w-64 px-4 py-2 border rounded-lg mb-6">
-                            <option value="">All Exams</option>
-                            ${exams?.map(e => `<option value="${e.id}">${e.title}</option>`).join('')}
-                        </select>
-                        <div id="leaderboard-content">
-                            ${renderLeaderboardTable(leaderboard)}
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('back-btn').addEventListener('click', loadDashboard);
-            document.getElementById('exam-filter').addEventListener('change', async (e) => {
-                showLoading(true);
-                let query = supabase.from('leaderboard_view').select('*');
-                if (e.target.value) query = query.eq('exam_id', e.target.value);
-                const { data } = await query.order('rank', { ascending: true }).limit(50);
-                document.getElementById('leaderboard-content').innerHTML = renderLeaderboardTable(data);
-                showLoading(false);
-            });
-        }
-        
-        function renderLeaderboardTable(data) {
-            if (!data?.length) return '<div class="text-center py-8 text-gray-500">No results yet</div>';
-            return `
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="p-3 text-left">Rank</th>
-                                <th class="p-3 text-left">Student</th>
-                                <th class="p-3 text-left">Exam</th>
-                                <th class="p-3 text-left">Score</th>
-                                <th class="p-3 text-left">%</th>
-                                <th class="p-3 text-left">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.map((item, idx) => `
-                                <tr class="border-b hover:bg-gray-50">
-                                    <td class="p-3 font-semibold ${idx < 3 ? 'text-yellow-600' : ''}">
-                                        ${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : item.rank}
-                                    </td>
-                                    <td class="p-3">${item.display_name || item.email?.split('@')[0]}</td>
-                                    <td class="p-3">${item.exam_title}</td>
-                                    <td class="p-3 font-bold text-blue-600">${item.score}</td>
-                                    <td class="p-3">${item.percentage}%</td>
-                                    <td class="p-3">${formatTime(item.time_taken)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
-        
-        // ============================================
-        // HISTORY
-        // ============================================
-        async function showHistory() {
-            showLoading(true);
-            const { data: history } = await supabase
-                .from('user_exam_attempts')
-                .select('*, exams(title)')
-                .eq('user_id', currentUser.id)
-                .order('completed_at', { ascending: false });
-            
             showLoading(false);
             
             const app = document.getElementById('app');
             app.innerHTML = `
                 <div class="bg-white rounded-xl shadow-lg p-6">
                     <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-2xl font-bold">My Exam History</h1>
-                        <button id="back-btn" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
-                            <i class="fas fa-arrow-left mr-2"></i>Back
-                        </button>
+                        <h1 class="text-2xl font-bold">🏆 Leaderboard</h1>
+                        <button onclick="loadDashboard()" class="px-4 py-2 bg-gray-600 text-white rounded-lg">Back</button>
                     </div>
-                    ${history?.length ? `
-                        <div class="space-y-4">
-                            ${history.map(h => `
-                                <div class="border rounded-lg p-4 hover:shadow-md transition">
-                                    <div class="flex justify-between items-start flex-wrap gap-2">
-                                        <div>
-                                            <h3 class="font-bold text-lg">${h.exams?.title}</h3>
-                                            <p class="text-sm text-gray-500">${formatDate(h.completed_at)}</p>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="text-2xl font-bold text-blue-600">${h.percentage}%</span>
-                                            <p class="text-sm text-gray-500">Score: ${h.score}</p>
-                                        </div>
-                                    </div>
-                                    <div class="flex gap-4 mt-3 text-sm">
-                                        <span class="text-green-600"><i class="fas fa-check mr-1"></i>${h.correct_count} Correct</span>
-                                        <span class="text-red-600"><i class="fas fa-times mr-1"></i>${h.wrong_count} Wrong</span>
-                                        <span class="text-yellow-600"><i class="fas fa-question mr-1"></i>${h.skipped_count} Skipped</span>
-                                        <span><i class="fas fa-clock mr-1"></i>${formatTime(h.time_taken)}</span>
-                                    </div>
-                                </div>
-                            `).join('')}
+                    ${data?.length ? `
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-100">
+                                    <tr><th class="p-3">Rank</th><th class="p-3">Student</th><th class="p-3">Exam</th><th class="p-3">Score</th><th class="p-3">%</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${data.map((r, i) => `
+                                        <tr class="border-b">
+                                            <td class="p-3 font-semibold">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i+1}</td>
+                                            <td class="p-3">${r.profiles?.full_name || r.profiles?.email?.split('@')[0]}</td>
+                                            <td class="p-3">${r.exams?.title}</td>
+                                            <td class="p-3 font-bold text-blue-600">${r.score}</td>
+                                            <td class="p-3">${((r.correct_count / (r.correct_count + r.wrong_count) * 100) || 0).toFixed(1)}%</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
                         </div>
-                    ` : '<div class="text-center py-8 text-gray-500">No exam history yet</div>'}
+                    ` : '<div class="text-center py-8 text-gray-500">No results yet</div>'}
                 </div>
             `;
-            document.getElementById('back-btn').addEventListener('click', loadDashboard);
         }
         
-        // ============================================
-        // PROFILE
-        // ============================================
-        async function showProfile() {
+        // History
+        async function showHistory() {
+            showLoading(true);
+            const { data } = await supabase
+                .from('results')
+                .select('*, exams(title)')
+                .eq('user_id', currentUser.id)
+                .order('created_at', { ascending: false });
+            showLoading(false);
+            
             const app = document.getElementById('app');
             app.innerHTML = `
-                <div class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-6">
-                    <div class="text-center mb-6">
-                        <div class="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-user text-4xl text-white"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold">My Profile</h1>
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-2xl font-bold">📚 My Exam History</h1>
+                        <button onclick="loadDashboard()" class="px-4 py-2 bg-gray-600 text-white rounded-lg">Back</button>
                     </div>
-                    <form id="profile-form" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-semibold mb-1">Display Name</label>
-                            <input type="text" id="display-name" value="${currentProfile?.display_name || ''}" class="w-full px-4 py-2 border rounded-lg">
+                    ${data?.length ? data.map(r => `
+                        <div class="border rounded-lg p-4 mb-3">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-bold text-lg">${r.exams?.title}</h3>
+                                    <p class="text-sm text-gray-500">${formatDate(r.created_at)}</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-2xl font-bold text-blue-600">${((r.correct_count / (r.correct_count + r.wrong_count) * 100) || 0).toFixed(1)}%</span>
+                                    <p class="text-sm">Score: ${r.score}</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 mt-3 text-sm">
+                                <span class="text-green-600">✓ ${r.correct_count} Correct</span>
+                                <span class="text-red-600">✗ ${r.wrong_count} Wrong</span>
+                                <span>⏱️ ${formatTime(r.time_taken)}</span>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold mb-1">Email</label>
-                            <input type="email" value="${currentUser.email}" disabled class="w-full px-4 py-2 border rounded-lg bg-gray-50">
-                        </div>
-                        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">Update Profile</button>
-                        <button type="button" id="back-btn" class="w-full bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Back to Dashboard</button>
-                    </form>
+                    `).join('') : '<div class="text-center py-8 text-gray-500">No exam history yet</div>'}
                 </div>
             `;
-            
-            document.getElementById('profile-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const displayName = document.getElementById('display-name').value;
-                const { error } = await supabase
-                    .from('profiles')
-                    .update({ display_name: displayName })
-                    .eq('id', currentUser.id);
-                
-                if (error) {
-                    showToast('Error updating profile', 'error');
-                } else {
-                    showToast('Profile updated!', 'success');
-                    currentProfile.display_name = displayName;
-                }
-            });
-            
-            document.getElementById('back-btn').addEventListener('click', loadDashboard);
         }
         
-        // ============================================
-        // ADMIN PANEL
-        // ============================================
+        // Admin Panel
         async function showAdminPanel() {
             if (currentProfile?.role !== 'admin') {
                 showToast('Unauthorized', 'error');
@@ -823,112 +554,81 @@
                 return;
             }
             
-            // Load exams for dropdowns
-            const { data: exams } = await supabase.from('exams').select('*').order('created_at', { ascending: false });
+            const { data: exams } = await supabase.from('exams').select('*');
             
             const app = document.getElementById('app');
             app.innerHTML = `
                 <div class="bg-white rounded-xl shadow-lg p-6">
                     <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-2xl font-bold">Admin Panel</h1>
-                        <button id="back-btn" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
-                            <i class="fas fa-arrow-left mr-2"></i>Back
-                        </button>
+                        <h1 class="text-2xl font-bold">⚙️ Admin Panel</h1>
+                        <button onclick="loadDashboard()" class="px-4 py-2 bg-gray-600 text-white rounded-lg">Back</button>
                     </div>
                     
                     <div class="grid md:grid-cols-2 gap-6">
-                        <!-- Create Exam -->
                         <div class="border rounded-lg p-4">
                             <h2 class="text-xl font-bold mb-4">Create Exam</h2>
-                            <form id="create-exam-form" class="space-y-3">
-                                <input type="text" id="title" placeholder="Exam Title" class="w-full px-3 py-2 border rounded-lg" required>
-                                <textarea id="description" placeholder="Description" class="w-full px-3 py-2 border rounded-lg" rows="2"></textarea>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <input type="datetime-local" id="start_time" class="px-3 py-2 border rounded-lg" required>
-                                    <input type="datetime-local" id="end_time" class="px-3 py-2 border rounded-lg" required>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <input type="number" id="duration" placeholder="Duration (minutes)" class="px-3 py-2 border rounded-lg" required>
-                                    <input type="number" id="total_questions" placeholder="Total Questions (optional)" class="px-3 py-2 border rounded-lg">
-                                </div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <input type="number" id="marks" placeholder="Marks per Question" step="0.01" class="px-3 py-2 border rounded-lg" required>
-                                    <input type="number" id="negative" placeholder="Negative Marking" step="0.01" class="px-3 py-2 border rounded-lg">
-                                </div>
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="is_paid" class="mr-2">
-                                    <span>Paid Exam</span>
-                                </label>
-                                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">Create Exam</button>
+                            <form id="createExamForm" class="space-y-3">
+                                <input type="text" id="title" placeholder="Title" class="w-full p-2 border rounded" required>
+                                <textarea id="desc" placeholder="Description" class="w-full p-2 border rounded" rows="2"></textarea>
+                                <input type="datetime-local" id="start" class="w-full p-2 border rounded" required>
+                                <input type="datetime-local" id="end" class="w-full p-2 border rounded" required>
+                                <input type="number" id="duration" placeholder="Duration (minutes)" class="w-full p-2 border rounded" required>
+                                <input type="number" id="marks" placeholder="Marks per question" step="0.01" class="w-full p-2 border rounded" required>
+                                <input type="number" id="negative" placeholder="Negative marking" step="0.01" class="w-full p-2 border rounded">
+                                <label class="flex items-center"><input type="checkbox" id="isPaid" class="mr-2"> Paid Exam</label>
+                                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded">Create Exam</button>
                             </form>
                         </div>
                         
-                        <!-- Bulk Upload Questions -->
                         <div class="border rounded-lg p-4">
                             <h2 class="text-xl font-bold mb-4">Bulk Upload Questions</h2>
-                            <select id="exam-select" class="w-full px-3 py-2 border rounded-lg mb-3">
+                            <select id="examSelect" class="w-full p-2 border rounded mb-3">
                                 <option value="">Select Exam</option>
                                 ${exams?.map(e => `<option value="${e.id}">${e.title}</option>`).join('')}
                             </select>
-                            <textarea id="questions-json" placeholder='[{"question":"What is 2+2?","a":"3","b":"4","c":"5","d":"6","correct":"b"}]' class="w-full px-3 py-2 border rounded-lg" rows="6"></textarea>
-                            <button id="upload-btn" class="mt-3 w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">Upload Questions</button>
+                            <textarea id="questionsJson" placeholder='[{"question":"What is 2+2?","a":"3","b":"4","c":"5","d":"6","correct":"b"}]' class="w-full p-2 border rounded" rows="6"></textarea>
+                            <button id="uploadBtn" class="mt-3 w-full bg-green-600 text-white py-2 rounded">Upload Questions</button>
                         </div>
                         
-                        <!-- Paid Users Management -->
                         <div class="border rounded-lg p-4">
-                            <h2 class="text-xl font-bold mb-4">Manage Paid Users</h2>
-                            <select id="paid-exam-select" class="w-full px-3 py-2 border rounded-lg mb-3">
+                            <h2 class="text-xl font-bold mb-4">Paid Users</h2>
+                            <select id="paidExamSelect" class="w-full p-2 border rounded mb-3">
                                 <option value="">Select Exam</option>
                                 ${exams?.map(e => `<option value="${e.id}">${e.title}</option>`).join('')}
                             </select>
                             <div class="flex gap-2 mb-3">
-                                <input type="email" id="user-email" placeholder="User Email" class="flex-1 px-3 py-2 border rounded-lg">
-                                <button id="add-paid-user" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Add</button>
+                                <input type="email" id="userEmail" placeholder="User Email" class="flex-1 p-2 border rounded">
+                                <button id="addPaidUser" class="bg-blue-600 text-white px-4 py-2 rounded">Add</button>
                             </div>
-                            <div id="paid-users-list" class="space-y-2 max-h-48 overflow-y-auto"></div>
-                        </div>
-                        
-                        <!-- Manage Exams -->
-                        <div class="border rounded-lg p-4">
-                            <h2 class="text-xl font-bold mb-4">Manage Exams</h2>
-                            <select id="manage-exam-select" class="w-full px-3 py-2 border rounded-lg mb-3">
-                                <option value="">Select Exam</option>
-                                ${exams?.map(e => `<option value="${e.id}">${e.title}</option>`).join('')}
-                            </select>
-                            <button id="delete-exam" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Delete Exam</button>
+                            <div id="paidUsersList" class="space-y-2 max-h-48 overflow-y-auto"></div>
                         </div>
                     </div>
                 </div>
             `;
             
-            // Create exam handler
-            document.getElementById('create-exam-form').addEventListener('submit', async (e) => {
+            // Create exam
+            document.getElementById('createExamForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const examData = {
+                const { error } = await supabase.from('exams').insert({
                     title: document.getElementById('title').value,
-                    description: document.getElementById('description').value,
-                    start_time: document.getElementById('start_time').value,
-                    end_time: document.getElementById('end_time').value,
+                    description: document.getElementById('desc').value,
+                    start_time: document.getElementById('start').value,
+                    end_time: document.getElementById('end').value,
                     duration: parseInt(document.getElementById('duration').value),
-                    total_questions_to_show: parseInt(document.getElementById('total_questions').value) || null,
                     marks_per_question: parseFloat(document.getElementById('marks').value),
                     negative_mark_per_wrong: parseFloat(document.getElementById('negative').value) || 0,
-                    is_paid: document.getElementById('is_paid').checked,
-                    created_by: currentUser.id
-                };
-                
-                const { error } = await supabase.from('exams').insert(examData);
+                    is_paid: document.getElementById('isPaid').checked
+                });
                 if (error) showToast('Error: ' + error.message, 'error');
-                else { showToast('Exam created!', 'success'); showAdminPanel(); }
+                else { showToast('Exam created!'); showAdminPanel(); }
             });
             
-            // Bulk upload handler
-            document.getElementById('upload-btn').addEventListener('click', async () => {
-                const examId = document.getElementById('exam-select').value;
+            // Bulk upload
+            document.getElementById('uploadBtn').addEventListener('click', async () => {
+                const examId = document.getElementById('examSelect').value;
                 if (!examId) { showToast('Select exam', 'error'); return; }
-                
                 try {
-                    const questions = JSON.parse(document.getElementById('questions-json').value);
+                    const questions = JSON.parse(document.getElementById('questionsJson').value);
                     const toInsert = questions.map(q => ({
                         exam_id: examId,
                         question_text: q.question,
@@ -939,19 +639,18 @@
                         correct_answer: q.correct,
                         image_url: q.image_url || null
                     }));
-                    
                     const { error } = await supabase.from('questions').insert(toInsert);
                     if (error) throw error;
-                    showToast(`Uploaded ${questions.length} questions!`, 'success');
+                    showToast(`Uploaded ${questions.length} questions!`);
                 } catch (err) {
                     showToast('Invalid JSON: ' + err.message, 'error');
                 }
             });
             
             // Add paid user
-            document.getElementById('add-paid-user').addEventListener('click', async () => {
-                const examId = document.getElementById('paid-exam-select').value;
-                const email = document.getElementById('user-email').value;
+            document.getElementById('addPaidUser').addEventListener('click', async () => {
+                const examId = document.getElementById('paidExamSelect').value;
+                const email = document.getElementById('userEmail').value;
                 if (!examId || !email) { showToast('Select exam and enter email', 'error'); return; }
                 
                 const { data: user } = await supabase.from('profiles').select('id').eq('email', email).single();
@@ -959,26 +658,12 @@
                 
                 const { error } = await supabase.from('paid_users').insert({ user_id: user.id, exam_id: examId });
                 if (error) showToast('Error: ' + error.message, 'error');
-                else { showToast('User added!', 'success'); loadPaidUsers(examId); }
+                else { showToast('User added!'); loadPaidUsers(examId); }
             });
             
-            // Load paid users on select change
-            document.getElementById('paid-exam-select').addEventListener('change', (e) => {
+            document.getElementById('paidExamSelect').addEventListener('change', (e) => {
                 if (e.target.value) loadPaidUsers(e.target.value);
             });
-            
-            // Delete exam
-            document.getElementById('delete-exam').addEventListener('click', async () => {
-                const examId = document.getElementById('manage-exam-select').value;
-                if (!examId) { showToast('Select exam', 'error'); return; }
-                if (confirm('Delete this exam and all questions?')) {
-                    const { error } = await supabase.from('exams').delete().eq('id', examId);
-                    if (error) showToast('Error: ' + error.message, 'error');
-                    else { showToast('Exam deleted', 'success'); showAdminPanel(); }
-                }
-            });
-            
-            document.getElementById('back-btn').addEventListener('click', loadDashboard);
         }
         
         async function loadPaidUsers(examId) {
@@ -987,110 +672,76 @@
                 .select('user_id, profiles(email)')
                 .eq('exam_id', examId);
             
-            const container = document.getElementById('paid-users-list');
+            const container = document.getElementById('paidUsersList');
             if (!data?.length) {
                 container.innerHTML = '<p class="text-gray-500 text-center py-4">No paid users</p>';
                 return;
             }
-            
             container.innerHTML = data.map(p => `
                 <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
                     <span>${p.profiles?.email}</span>
-                    <button onclick="removePaidUser('${p.user_id}', '${examId}')" class="text-red-600 hover:text-red-800">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <button onclick="removePaidUser('${p.user_id}', '${examId}')" class="text-red-600">❌</button>
                 </div>
             `).join('');
         }
         
         window.removePaidUser = async (userId, examId) => {
-            const { error } = await supabase
-                .from('paid_users')
-                .delete()
-                .eq('user_id', userId)
-                .eq('exam_id', examId);
-            if (!error) loadPaidUsers(examId);
+            await supabase.from('paid_users').delete().eq('user_id', userId).eq('exam_id', examId);
+            loadPaidUsers(examId);
         };
         
-        // ============================================
-        // AUTH UI
-        // ============================================
+        // Auth UI
         function showAuth() {
-            currentView = 'auth';
             const app = document.getElementById('app');
             app.innerHTML = `
                 <div class="max-w-md mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
                     <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-8 text-white text-center">
-                        <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-graduation-cap text-4xl text-blue-600"></i>
-                        </div>
+                        <i class="fas fa-graduation-cap text-5xl mb-4"></i>
                         <h1 class="text-3xl font-bold">Exalyte</h1>
                         <p class="text-blue-100 mt-2">Premium Exam Platform</p>
                     </div>
                     <div class="p-8">
                         <div class="flex gap-2 mb-6 border-b">
-                            <button id="login-tab" class="flex-1 py-2 font-semibold border-b-2 border-blue-600 text-blue-600">Login</button>
-                            <button id="signup-tab" class="flex-1 py-2 font-semibold text-gray-500">Sign Up</button>
+                            <button id="loginTab" class="flex-1 py-2 font-semibold border-b-2 border-blue-600 text-blue-600">Login</button>
+                            <button id="signupTab" class="flex-1 py-2 font-semibold text-gray-500">Sign Up</button>
                         </div>
                         
-                        <div id="login-form">
-                            <input type="email" id="login-email" placeholder="Email" class="w-full px-4 py-3 border rounded-lg mb-3">
-                            <input type="password" id="login-password" placeholder="Password" class="w-full px-4 py-3 border rounded-lg mb-4">
-                            <button id="login-btn" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">Login</button>
-                            <div class="relative my-6">
-                                <div class="absolute inset-0 flex items-center"><div class="w-full border-t"></div></div>
-                                <div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">Or</span></div>
-                            </div>
-                            <button id="google-btn" class="w-full bg-white border py-3 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
-                                <i class="fab fa-google text-red-500"></i>Sign in with Google
-                            </button>
+                        <div id="loginForm">
+                            <input type="email" id="loginEmail" placeholder="Email" class="w-full p-3 border rounded-lg mb-3">
+                            <input type="password" id="loginPassword" placeholder="Password" class="w-full p-3 border rounded-lg mb-4">
+                            <button id="loginBtn" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">Login</button>
+                            <div class="relative my-6"><div class="absolute inset-0 flex items-center"><div class="w-full border-t"></div></div><div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">Or</span></div></div>
+                            <button id="googleBtn" class="w-full bg-white border py-3 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"><i class="fab fa-google text-red-500"></i>Sign in with Google</button>
                         </div>
                         
-                        <div id="signup-form" class="hidden">
-                            <input type="text" id="signup-name" placeholder="Full Name" class="w-full px-4 py-3 border rounded-lg mb-3">
-                            <input type="email" id="signup-email" placeholder="Email" class="w-full px-4 py-3 border rounded-lg mb-3">
-                            <input type="password" id="signup-password" placeholder="Password" class="w-full px-4 py-3 border rounded-lg mb-4">
-                            <button id="signup-btn" class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700">Create Account</button>
+                        <div id="signupForm" class="hidden">
+                            <input type="text" id="signupName" placeholder="Full Name" class="w-full p-3 border rounded-lg mb-3">
+                            <input type="email" id="signupEmail" placeholder="Email" class="w-full p-3 border rounded-lg mb-3">
+                            <input type="password" id="signupPassword" placeholder="Password" class="w-full p-3 border rounded-lg mb-4">
+                            <button id="signupBtn" class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700">Create Account</button>
                         </div>
                     </div>
                 </div>
             `;
             
-            document.getElementById('login-tab').onclick = () => {
-                document.getElementById('login-form').classList.remove('hidden');
-                document.getElementById('signup-form').classList.add('hidden');
-                document.getElementById('login-tab').className = 'flex-1 py-2 font-semibold border-b-2 border-blue-600 text-blue-600';
-                document.getElementById('signup-tab').className = 'flex-1 py-2 font-semibold text-gray-500';
+            document.getElementById('loginTab').onclick = () => {
+                document.getElementById('loginForm').classList.remove('hidden');
+                document.getElementById('signupForm').classList.add('hidden');
+                document.getElementById('loginTab').className = 'flex-1 py-2 font-semibold border-b-2 border-blue-600 text-blue-600';
+                document.getElementById('signupTab').className = 'flex-1 py-2 font-semibold text-gray-500';
             };
-            
-            document.getElementById('signup-tab').onclick = () => {
-                document.getElementById('login-form').classList.add('hidden');
-                document.getElementById('signup-form').classList.remove('hidden');
-                document.getElementById('signup-tab').className = 'flex-1 py-2 font-semibold border-b-2 border-purple-600 text-purple-600';
-                document.getElementById('login-tab').className = 'flex-1 py-2 font-semibold text-gray-500';
+            document.getElementById('signupTab').onclick = () => {
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('signupForm').classList.remove('hidden');
+                document.getElementById('signupTab').className = 'flex-1 py-2 font-semibold border-b-2 border-purple-600 text-purple-600';
+                document.getElementById('loginTab').className = 'flex-1 py-2 font-semibold text-gray-500';
             };
-            
-            document.getElementById('login-btn').onclick = () => {
-                const email = document.getElementById('login-email').value;
-                const password = document.getElementById('login-password').value;
-                if (email && password) login(email, password);
-                else showToast('Fill all fields', 'error');
-            };
-            
-            document.getElementById('google-btn').onclick = loginWithGoogle;
-            
-            document.getElementById('signup-btn').onclick = () => {
-                const name = document.getElementById('signup-name').value;
-                const email = document.getElementById('signup-email').value;
-                const password = document.getElementById('signup-password').value;
-                if (name && email && password) signup(email, password, name);
-                else showToast('Fill all fields', 'error');
-            };
+            document.getElementById('loginBtn').onclick = () => login(document.getElementById('loginEmail').value, document.getElementById('loginPassword').value);
+            document.getElementById('googleBtn').onclick = loginWithGoogle;
+            document.getElementById('signupBtn').onclick = () => signup(document.getElementById('signupEmail').value, document.getElementById('signupPassword').value, document.getElementById('signupName').value);
         }
         
-        // ============================================
-        // INITIALIZE APP
-        // ============================================
+        // Start app
         checkAuth();
     </script>
 </body>
