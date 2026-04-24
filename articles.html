@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article - English Learning Lab</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; }
+        .header { background: #1a1a2e; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .logo { font-size: 1.5rem; font-weight: bold; }
+        .logo span { color: #e67e22; }
+        .btn { padding: 0.5rem 1.5rem; border-radius: 8px; border: none; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn-outline { background: transparent; border: 1px solid #e67e22; color: #e67e22; }
+        .btn-primary { background: #e67e22; color: white; }
+        .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        .article-card { background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+        .article-image { width: 100%; max-height: 400px; object-fit: cover; border-radius: 12px; margin-bottom: 1.5rem; }
+        .article-title { font-size: 2rem; margin-bottom: 1rem; }
+        .article-meta { display: flex; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+        .badge { padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .badge-free { background: #27ae60; color: white; }
+        .badge-premium { background: #e67e22; color: white; }
+        .article-content { line-height: 1.8; color: #333; }
+        .paywall { background: #fff3e0; border: 2px solid #e67e22; border-radius: 12px; padding: 2rem; text-align: center; margin-top: 2rem; }
+        .paywall h3 { color: #e67e22; margin-bottom: 1rem; }
+        .user-badge { background: #e67e22; color: white; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.75rem; }
+        @media (max-width: 768px) { .container { padding: 1rem; } .article-title { font-size: 1.5rem; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">English <span>Learning Lab</span></div>
+        <div class="nav-buttons" id="navButtons"></div>
+    </div>
+
+    <div class="container">
+        <div id="articleContainer" class="article-card">Loading...</div>
+        <a href="index.html" class="btn btn-outline" style="margin-top: 2rem; display: inline-block;">← Back to Home</a>
+    </div>
+
+    <div class="footer" style="background: #1a1a2e; color: white; text-align: center; padding: 2rem; margin-top: 2rem;">
+        <p>Contact on Telegram: <a href="https://t.me/adamzampas" style="color: #e67e22;">@adamzampas</a></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://noekogokjjptosipfile.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_TQRMwY2EqtZgAoyMqcSrlw_2TxPE7Lk';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let currentUser = null;
+        let userSubscription = null;
+
+        async function checkUser() {
+            const { data: { user } } = await supabase.auth.getUser();
+            currentUser = user;
+            
+            const navButtons = document.getElementById('navButtons');
+            
+            if (user) {
+                const token = (await supabase.auth.getSession()).data.session?.access_token;
+                const res = await fetch('/api/auth/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const userData = await res.json();
+                userSubscription = userData.subscription;
+                
+                navButtons.innerHTML = `
+                    <span class="user-badge">${user.email} ${userSubscription ? '⭐ Premium' : '📖 Free'}</span>
+                    <button onclick="logout()" class="btn btn-outline" style="margin-left: 10px;">Logout</button>
+                `;
+            } else {
+                navButtons.innerHTML = `<a href="login.html" class="btn btn-outline">Sign In</a>`;
+            }
+        }
+
+        async function logout() {
+            await supabase.auth.signOut();
+            window.location.href = 'index.html';
+        }
+
+        async function loadArticle() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const slug = urlParams.get('slug');
+            
+            if (!slug) {
+                document.getElementById('articleContainer').innerHTML = '<div>Article not found</div>';
+                return;
+            }
+            
+            const res = await fetch(`/api/articles?slug=${slug}`);
+            const article = await res.json();
+            
+            if (article.error) {
+                document.getElementById('articleContainer').innerHTML = '<div>Article not found</div>';
+                return;
+            }
+            
+            const canAccess = article.is_free || (userSubscription && userSubscription.status === 'active');
+            
+            if (canAccess) {
+                document.getElementById('articleContainer').innerHTML = `
+                    ${article.image_url ? `<img src="${article.image_url}" class="article-image">` : ''}
+                    <h1 class="article-title">${escapeHtml(article.title)}</h1>
+                    <div class="article-meta">
+                        <span class="badge ${article.is_free ? 'badge-free' : 'badge-premium'}">${article.is_free ? 'Free' : 'Premium'}</span>
+                        <span>👁️ ${article.view_count || 0} views</span>
+                    </div>
+                    <div class="article-content">${article.content}</div>
+                `;
+            } else {
+                document.getElementById('articleContainer').innerHTML = `
+                    ${article.image_url ? `<img src="${article.image_url}" class="article-image">` : ''}
+                    <h1 class="article-title">${escapeHtml(article.title)}</h1>
+                    <div class="article-meta">
+                        <span class="badge badge-premium">Premium</span>
+                        <span>👁️ ${article.view_count || 0} views</span>
+                    </div>
+                    <div class="paywall">
+                        <h3>🔒 Premium Content</h3>
+                        <p>This article is for premium subscribers only.</p>
+                        <p>Subscribe to access all premium lessons and articles!</p>
+                        <br>
+                        <p><strong>Monthly: 100 BDT</strong> | <strong>Yearly: 1000 BDT</strong></p>
+                        <br>
+                        <a href="https://t.me/adamzampas" class="btn btn-primary" style="text-decoration: none;">Contact on Telegram to Subscribe</a>
+                    </div>
+                `;
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        checkUser();
+        loadArticle();
+    </script>
+</body>
+</html>
