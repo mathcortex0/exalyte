@@ -1,0 +1,8 @@
+name = "english-learning-lab"
+main = "index.html"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "englishdb"
+database_id = "eb41632e-6771-498d-a2f4-676c8c441d32"
