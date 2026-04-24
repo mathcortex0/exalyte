@@ -1,40 +1,282 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exams</title>
-    <style>
-        body { font-family: system-ui; padding: 20px; }
-        .exam { background: #f0f2f5; padding: 20px; margin: 10px 0; border-radius: 10px; }
-        button { background: #e67e22; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExamForge — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c26;
+    --border: #2a2a3a;
+    --gold: #f0c040;
+    --gold2: #ffd966;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --error: #ff5566;
+    --success: #44cc88;
+    --radius: 10px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Instrument Sans',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    display:grid;
+    place-items:center;
+    padding:20px;
+    background-image:
+      radial-gradient(ellipse 60% 50% at 20% 50%, rgba(240,192,64,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 80% 20%, rgba(100,80,200,0.08) 0%, transparent 70%);
+  }
+
+  .card {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:40px;
+    width:100%;
+    max-width:440px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card::before {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0;
+    height:2px;
+    background:linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  .brand {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:32px;
+  }
+  .brand-icon {
+    width:36px; height:36px;
+    background:var(--gold);
+    border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px;
+  }
+  .brand-name {
+    font-family:'Syne',sans-serif;
+    font-size:1.3rem;
+    font-weight:800;
+    letter-spacing:-0.02em;
+    color:var(--text);
+  }
+
+  .tabs {
+    display:flex;
+    background:var(--bg);
+    border-radius:8px;
+    padding:4px;
+    margin-bottom:28px;
+    gap:4px;
+  }
+  .tab {
+    flex:1;
+    padding:9px;
+    border:none;
+    background:transparent;
+    border-radius:6px;
+    font-family:'Syne',sans-serif;
+    font-size:0.85rem;
+    font-weight:600;
+    cursor:pointer;
+    color:var(--muted);
+    transition:all .2s;
+  }
+  .tab.active { background:var(--surface2); color:var(--gold); }
+
+  .form-group { margin-bottom:16px; }
+  .form-label {
+    display:block;
+    font-size:0.78rem;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--muted);
+    margin-bottom:7px;
+  }
+  .form-input {
+    width:100%;
+    padding:12px 14px;
+    background:var(--bg);
+    border:1.5px solid var(--border);
+    border-radius:var(--radius);
+    font-family:'Instrument Sans',sans-serif;
+    font-size:0.92rem;
+    color:var(--text);
+    outline:none;
+    transition:border-color .2s;
+  }
+  .form-input:focus { border-color:var(--gold); }
+  .form-input::placeholder { color:var(--muted); }
+
+  .btn {
+    width:100%;
+    padding:13px;
+    background:var(--gold);
+    color:#0a0a0f;
+    border:none;
+    border-radius:var(--radius);
+    font-family:'Syne',sans-serif;
+    font-size:0.92rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all .2s;
+    margin-top:6px;
+    letter-spacing:.02em;
+  }
+  .btn:hover { background:var(--gold2); transform:translateY(-1px); }
+  .btn:active { transform:translateY(0); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+
+  .alert {
+    padding:11px 14px;
+    border-radius:var(--radius);
+    font-size:0.84rem;
+    margin-bottom:14px;
+    display:none;
+  }
+  .alert.error { background:rgba(255,85,102,0.1); border:1px solid rgba(255,85,102,0.3); color:var(--error); display:block; }
+  .alert.success { background:rgba(68,204,136,0.1); border:1px solid rgba(68,204,136,0.3); color:var(--success); display:block; }
+
+  .spinner {
+    display:inline-block;
+    width:14px; height:14px;
+    border:2px solid rgba(10,10,15,0.3);
+    border-top-color:#0a0a0f;
+    border-radius:50%;
+    animation:spin .6s linear infinite;
+    vertical-align:middle;
+    margin-right:6px;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .demo-creds {
+    margin-top:20px;
+    padding:12px;
+    background:var(--bg);
+    border-radius:var(--radius);
+    font-size:0.78rem;
+    color:var(--muted);
+    text-align:center;
+    border:1px solid var(--border);
+  }
+  .demo-creds strong { color:var(--gold); }
+</style>
 </head>
 <body>
-    <h1>Available Exams</h1>
-    <div id="exams"></div>
+<div class="card">
+  <div class="brand">
+    <div class="brand-icon">📝</div>
+    <div class="brand-name">ExamForge</div>
+  </div>
 
-    <script>
-        const user = JSON.parse(localStorage.getItem('user') || 'null');
-        if (!user) window.location.href = 'login.html';
-        
-        async function loadExams() {
-            const res = await fetch('/api/exams');
-            const exams = await res.json();
-            document.getElementById('exams').innerHTML = exams.map(e => `
-                <div class="exam">
-                    <h3>${e.name}</h3>
-                    <button onclick="startExam(${e.id})">Start</button>
-                </div>
-            `).join('');
-        }
-        
-        function startExam(id) {
-            localStorage.setItem('exam_id', id);
-            window.location.href = 'exam.html';
-        }
-        
-        loadExams();
-    </script>
+  <div class="tabs">
+    <button class="tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+    <button class="tab" id="tabSignup" onclick="switchTab('signup')">Create Account</button>
+  </div>
+
+  <div id="loginForm">
+    <div class="alert" id="loginAlert"></div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input class="form-input" type="email" id="loginEmail" placeholder="you@example.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" type="password" id="loginPassword" placeholder="••••••••">
+    </div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">Sign In</button>
+  </div>
+
+  <div id="signupForm" style="display:none">
+    <div class="alert" id="signupAlert"></div>
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input class="form-input" type="text" id="signupName" placeholder="Your name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input class="form-input" type="email" id="signupEmail" placeholder="you@example.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" type="password" id="signupPassword" placeholder="Min. 6 characters">
+    </div>
+    <button class="btn" id="signupBtn" onclick="doSignup()">Create Account</button>
+  </div>
+
+  <div class="demo-creds">
+    Admin login: <strong>admin@exam.com</strong> / <strong>admin123</strong>
+  </div>
+</div>
+
+<script>
+function switchTab(t) {
+  document.getElementById('loginForm').style.display = t === 'login' ? 'block' : 'none';
+  document.getElementById('signupForm').style.display = t === 'signup' ? 'block' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', t === 'login');
+  document.getElementById('tabSignup').classList.toggle('active', t === 'signup');
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const alertEl = document.getElementById('loginAlert');
+  const btn = document.getElementById('loginBtn');
+  alertEl.className = 'alert';
+  if (!email || !password) { alertEl.className='alert error'; alertEl.textContent='Fill all fields'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Signing in...';
+  try {
+    const res = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password}) });
+    const data = await res.json();
+    if (!res.ok) { alertEl.className='alert error'; alertEl.textContent=data.error; btn.disabled=false; btn.textContent='Sign In'; return; }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    window.location.href = data.user.is_admin ? '/admin.html' : '/dashboard.html';
+  } catch(e) { alertEl.className='alert error'; alertEl.textContent='Network error'; btn.disabled=false; btn.textContent='Sign In'; }
+}
+
+async function doSignup() {
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  const alertEl = document.getElementById('signupAlert');
+  const btn = document.getElementById('signupBtn');
+  alertEl.className = 'alert';
+  if (!name || !email || !password) { alertEl.className='alert error'; alertEl.textContent='Fill all fields'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Creating...';
+  try {
+    const res = await fetch('/api/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,email,password}) });
+    const data = await res.json();
+    if (!res.ok) { alertEl.className='alert error'; alertEl.textContent=data.error; btn.disabled=false; btn.textContent='Create Account'; return; }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    window.location.href = '/dashboard.html';
+  } catch(e) { alertEl.className='alert error'; alertEl.textContent='Network error'; btn.disabled=false; btn.textContent='Create Account'; }
+}
+
+// Check already logged in
+const existing = localStorage.getItem('user');
+if (existing) {
+  const u = JSON.parse(existing);
+  window.location.href = u.is_admin ? '/admin.html' : '/dashboard.html';
+}
+
+document.addEventListener('keydown', e => { if(e.key==='Enter') { document.getElementById('loginForm').style.display!=='none' ? doLogin() : doSignup(); } });
+</script>
 </body>
 </html>
