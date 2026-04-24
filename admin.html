@@ -3,262 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>Admin</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; background: #f0f2f5; }
-        .header { background: #1a1a2e; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-        .logo span { color: #e67e22; }
-        .btn { padding: 0.5rem 1rem; border-radius: 8px; border: none; cursor: pointer; }
-        .btn-primary { background: #e67e22; color: white; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-        .nav-tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
-        .nav-tab { padding: 0.75rem 1.5rem; background: white; border: 1px solid #ddd; cursor: pointer; }
-        .nav-tab.active { background: #e67e22; color: white; }
-        .panel { display: none; background: white; border-radius: 16px; padding: 1.5rem; }
-        .panel.active { display: block; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; }
-        input, select, textarea { width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ddd; border-radius: 8px; }
-        .form-group { margin-bottom: 1rem; }
-        @media (max-width: 768px) { .container { padding: 1rem; } th, td { font-size: 0.8rem; } }
+        body { font-family: system-ui; padding: 20px; }
+        input, textarea { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; }
+        button { background: #e67e22; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">Admin <span>Dashboard</span></div>
-        <div><button class="btn" onclick="logout()">Logout</button> <button class="btn" onclick="location.href='index.html'">Site</button></div>
-    </div>
-    <div class="container">
-        <div class="nav-tabs">
-            <div class="nav-tab active" onclick="switchPanel('exams')">Exams</div>
-            <div class="nav-tab" onclick="switchPanel('users')">Users</div>
-            <div class="nav-tab" onclick="switchPanel('results')">Results</div>
-        </div>
-        
-        <div id="examsPanel" class="panel active">
-            <button class="btn btn-primary" onclick="showCreateExam()">+ Create Exam</button>
-            <hr style="margin: 1rem 0">
-            <div id="examsList"></div>
-        </div>
-        
-        <div id="usersPanel" class="panel">
-            <div id="usersList"></div>
-        </div>
-        
-        <div id="resultsPanel" class="panel">
-            <div id="resultsList"></div>
-        </div>
+    <h1>Admin Panel</h1>
+    
+    <div class="card">
+        <h3>Create New Exam</h3>
+        <input type="text" id="examName" placeholder="Exam Name">
+        <textarea id="examDesc" placeholder="Description"></textarea>
+        <input type="number" id="examTime" placeholder="Time Limit (seconds)" value="1800">
+        <label><input type="checkbox" id="examPremium"> Premium Exam</label>
+        <button onclick="createExam()">Create Exam</button>
     </div>
     
-    <div id="examModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); justify-content:center; align-items:center;">
-        <div style="background:white; padding:2rem; border-radius:16px; width:90%; max-width:500px;">
-            <h3 id="modalTitle">Create Exam</h3>
-            <div class="form-group"><input type="text" id="examName" placeholder="Exam Name"></div>
-            <div class="form-group"><textarea id="examDesc" placeholder="Description"></textarea></div>
-            <div class="form-group"><input type="number" id="examTime" placeholder="Time Limit (seconds)" value="1800"></div>
-            <div class="form-group"><label><input type="checkbox" id="examPremium"> Premium Exam</label></div>
-            <div class="form-group"><label>Upload CSV (question,option_a,option_b,option_c,option_d,correct,image_url)</label><input type="file" id="csvFile" accept=".csv"></div>
-            <button class="btn btn-primary" onclick="saveExam()">Save</button>
-            <button class="btn" onclick="closeModal()">Cancel</button>
-        </div>
+    <div class="card">
+        <h3>Upload Questions (CSV)</h3>
+        <p>Format: question,option_a,option_b,option_c,option_d,correct,image_url</p>
+        <select id="examSelect"></select>
+        <input type="file" id="csvFile" accept=".csv">
+        <button onclick="uploadCSV()">Upload</button>
+    </div>
+    
+    <div class="card">
+        <h3>All Exams</h3>
+        <div id="examsList"></div>
     </div>
 
     <script>
-        const user = JSON.parse(localStorage.getItem('exam_user'));
-        if (!user || !user.is_admin) {
-            window.location.href = 'index.html';
-        }
-        
-        let currentExamId = null;
-        
-        async function switchPanel(panel) {
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(`${panel}Panel`).classList.add('active');
-            event.target.classList.add('active');
-            
-            if (panel === 'exams') loadExams();
-            if (panel === 'users') loadUsers();
-            if (panel === 'results') loadResults();
-        }
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || !user.is_admin) window.location.href = 'index.html';
         
         async function loadExams() {
-            const res = await fetch('/api/exams', { headers: { 'X-User-Data': JSON.stringify(user) } });
+            const res = await fetch('/api/exams');
             const exams = await res.json();
             
-            document.getElementById('examsList').innerHTML = `
-                <table>
-                    <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${exams.map(e => `
-                            <tr>
-                                <td>${e.id}</td>
-                                <td>${e.name}</td>
-                                <td>${e.is_premium ? 'Premium' : 'Free'}</td>
-                                <td>${Math.floor(e.time_limit / 60)} min</td>
-                                <td>
-                                    <button class="btn btn-primary" onclick="uploadCSV(${e.id}, '${e.name}')">Upload CSV</button>
-                                    <button class="btn btn-danger" onclick="deleteExam(${e.id})">Delete</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-        }
-        
-        async function loadUsers() {
-            const res = await fetch('/api/admin/users', { headers: { 'X-Admin-Data': JSON.stringify(user) } });
-            const users = await res.json();
+            const select = document.getElementById('examSelect');
+            select.innerHTML = '<option value="">Select Exam</option>' + 
+                exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
             
-            document.getElementById('usersList').innerHTML = `
-                <table>
-                    <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Premium</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${users.map(u => `
-                            <tr>
-                                <td>${u.id}</td>
-                                <td>${u.name}</td>
-                                <td>${u.email}</td>
-                                <td>${u.is_premium_allowed ? 'Yes' : 'No'}</td>
-                                <td><button class="btn btn-primary" onclick="grantPremium(${u.id})">Grant Premium Access</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+            document.getElementById('examsList').innerHTML = exams.map(e => `
+                <div style="border:1px solid #ddd; padding:10px; margin:5px 0;">
+                    <strong>${e.name}</strong> - ${e.is_premium ? 'Premium' : 'Free'}
+                    <button onclick="deleteExam(${e.id})">Delete</button>
+                </div>
+            `).join('');
         }
         
-        async function loadResults() {
-            const res = await fetch('/api/admin/results', { headers: { 'X-Admin-Data': JSON.stringify(user) } });
-            const results = await res.json();
+        async function createExam() {
+            const name = document.getElementById('examName').value;
+            const description = document.getElementById('examDesc').value;
+            const time_limit = parseInt(document.getElementById('examTime').value);
+            const is_premium = document.getElementById('examPremium').checked ? 1 : 0;
             
-            document.getElementById('resultsList').innerHTML = `
-                <table>
-                    <thead><tr><th>User</th><th>Exam</th><th>Score</th><th>Percentage</th><th>Date</th></tr></thead>
-                    <tbody>
-                        ${results.map(r => `
-                            <tr>
-                                <td>${r.user_name}</td>
-                                <td>${r.exam_name}</td>
-                                <td>${r.score}/${r.total_questions}</td>
-                                <td>${r.percentage.toFixed(1)}%</td>
-                                <td>${new Date(r.submitted_at).toLocaleString()}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-        }
-        
-        function showCreateExam() {
-            currentExamId = null;
-            document.getElementById('modalTitle').innerText = 'Create Exam';
-            document.getElementById('examName').value = '';
-            document.getElementById('examDesc').value = '';
-            document.getElementById('examTime').value = '1800';
-            document.getElementById('examPremium').checked = false;
-            document.getElementById('csvFile').value = '';
-            document.getElementById('examModal').style.display = 'flex';
-        }
-        
-        function uploadCSV(examId, examName) {
-            currentExamId = examId;
-            document.getElementById('modalTitle').innerText = `Upload CSV to ${examName}`;
-            document.getElementById('examName').value = '';
-            document.getElementById('examDesc').value = '';
-            document.getElementById('examModal').style.display = 'flex';
-        }
-        
-        async function saveExam() {
-            if (currentExamId) {
-                const csvFile = document.getElementById('csvFile').files[0];
-                if (!csvFile) {
-                    alert('Please select a CSV file');
-                    return;
-                }
-                
-                const formData = new FormData();
-                formData.append('exam_id', currentExamId);
-                formData.append('csv_file', csvFile);
-                
-                const res = await fetch('/api/admin/upload-csv', {
-                    method: 'POST',
-                    headers: { 'X-Admin-Data': JSON.stringify(user) },
-                    body: formData
-                });
-                
-                const data = await res.json();
-                if (data.success) {
-                    alert(`${data.inserted} questions uploaded!`);
-                    closeModal();
-                    loadExams();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } else {
-                const name = document.getElementById('examName').value;
-                const description = document.getElementById('examDesc').value;
-                const time_limit = parseInt(document.getElementById('examTime').value);
-                const is_premium = document.getElementById('examPremium').checked ? 1 : 0;
-                
-                const res = await fetch('/api/admin/exam', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Admin-Data': JSON.stringify(user) },
-                    body: JSON.stringify({ name, description, time_limit, is_premium })
-                });
-                
-                const data = await res.json();
-                if (data.success) {
-                    alert('Exam created! Now upload CSV.');
-                    currentExamId = data.exam_id;
-                    document.getElementById('modalTitle').innerText = 'Upload CSV';
-                    document.getElementById('examName').value = '';
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            }
-        }
-        
-        async function grantPremium(userId) {
-            const examId = prompt('Enter Exam ID to grant access:');
-            if (!examId) return;
-            
-            const res = await fetch('/api/admin/grant-premium', {
+            const res = await fetch('/api/admin/exam', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Admin-Data': JSON.stringify(user) },
-                body: JSON.stringify({ user_id: userId, exam_id: parseInt(examId) })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description, time_limit, is_premium })
             });
             
             const data = await res.json();
             if (data.success) {
-                alert('Premium access granted!');
-                loadUsers();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        }
-        
-        async function deleteExam(examId) {
-            if (confirm('Delete this exam and all questions?')) {
-                await fetch(`/api/admin/exam/${examId}`, {
-                    method: 'DELETE',
-                    headers: { 'X-Admin-Data': JSON.stringify(user) }
-                });
+                alert('Exam created!');
                 loadExams();
             }
         }
         
-        function closeModal() {
-            document.getElementById('examModal').style.display = 'none';
+        async function uploadCSV() {
+            const examId = document.getElementById('examSelect').value;
+            const file = document.getElementById('csvFile').files[0];
+            
+            if (!examId || !file) {
+                alert('Select exam and CSV file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('exam_id', examId);
+            formData.append('csv_file', file);
+            
+            const res = await fetch('/api/admin/upload-csv', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await res.json();
+            alert(`${data.inserted} questions uploaded!`);
         }
         
-        function logout() {
-            localStorage.removeItem('exam_user');
-            window.location.href = 'login.html';
+        async function deleteExam(id) {
+            if (confirm('Delete this exam?')) {
+                await fetch(`/api/admin/exam/${id}`, { method: 'DELETE' });
+                loadExams();
+            }
         }
         
         loadExams();
