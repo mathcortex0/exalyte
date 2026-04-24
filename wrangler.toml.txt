@@ -4,5 +4,5 @@ pages_build_output_dir = "public"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "posts-db"
-database_id = "45b1b40c-c727-4da8-9d6b-422bab6e26b6"
+database_name = "englishdb"
+database_id = "eb41632e-6771-498d-a2f4-676c8c441d32"
