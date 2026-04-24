@@ -1,18 +1,16 @@
 // functions/api/[[route]].js
-// Cloudflare Pages Functions — handles all /api/* routes
+// Exalyte Cloudflare Pages Functions
 
-// ── Simple SHA-256 (Web Crypto API available in CF Workers) ──
 async function sha256(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-// ── JWT-like token using HMAC-SHA256 ──
-const SECRET = 'exam_secret_key_change_in_prod_2024';
+const SECRET = 'exalyte_prod_secret_2024_x9kLm3nR7pQw';
 
 async function signToken(payload) {
   const header = btoa(JSON.stringify({ alg:'HS256', typ:'JWT' }));
-  const body   = btoa(JSON.stringify(payload));
+  const body = btoa(JSON.stringify(payload));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SECRET),
     { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${body}`));
@@ -35,7 +33,6 @@ async function verifyToken(token) {
   } catch { return null; }
 }
 
-// ── Auth middleware ──
 async function getUser(request) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.replace('Bearer ', '').trim();
@@ -43,7 +40,6 @@ async function getUser(request) {
   return verifyToken(token);
 }
 
-// ── CORS headers ──
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
@@ -61,7 +57,6 @@ function err(msg, status = 400) {
   return json({ error: msg }, status);
 }
 
-// ── Ensure tables exist ──
 async function ensureTables(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
@@ -91,19 +86,25 @@ async function ensureTables(db) {
     exam_id INTEGER NOT NULL, granted_by INTEGER,
     granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, exam_id))`).run();
-
-  // Default admin
-  const adminPw = await sha256('admin123');
-  await db.prepare(`INSERT OR IGNORE INTO users (name,email,password,is_admin) VALUES (?,?,?,1)`)
-    .bind('Admin','admin@exam.com', adminPw).run();
 }
 
-// ══════════════════════════════════════════════
-// ROUTE HANDLERS
-// ══════════════════════════════════════════════
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; continue; }
+    if (ch === ',' && !inQuotes) { result.push(current); current = ''; continue; }
+    current += ch;
+  }
+  result.push(current);
+  return result;
+}
+
+// ═══ ROUTE HANDLERS ═══
 
 async function handleAuth(method, path, body, db) {
-  // POST /api/auth/signup
   if (method === 'POST' && path === '/signup') {
     const { name, email, password } = body;
     if (!name || !email || !password) return err('All fields required');
@@ -123,7 +124,6 @@ async function handleAuth(method, path, body, db) {
     }
   }
 
-  // POST /api/auth/login
   if (method === 'POST' && path === '/login') {
     const { email, password } = body;
     if (!email || !password) return err('Email and password required');
@@ -142,61 +142,51 @@ async function handleAuth(method, path, body, db) {
 async function handleExams(method, path, body, db, user) {
   if (!user) return err('Unauthorized', 401);
 
-  // GET /api/exams — list accessible exams
+  // GET /api/exams/ — list accessible exams
   if (method === 'GET' && path === '/') {
     const allExams = await db.prepare('SELECT * FROM exams ORDER BY created_at DESC').all();
     const exams = [];
-
     for (const exam of allExams.results) {
       const qCount = await db.prepare('SELECT COUNT(*) as cnt FROM questions WHERE exam_id=?').bind(exam.id).first();
       const attempt = await db.prepare(
         'SELECT id,score,total_questions,percentage,submitted_at FROM exam_attempts WHERE user_id=? AND exam_id=? ORDER BY submitted_at DESC LIMIT 1'
       ).bind(user.id, exam.id).first();
 
-      let accessible = !exam.is_premium; // free exams always accessible
+      let accessible = !exam.is_premium;
       if (exam.is_premium && user.is_admin) accessible = true;
       if (exam.is_premium && !accessible) {
         const grant = await db.prepare('SELECT id FROM premium_access WHERE user_id=? AND exam_id=?').bind(user.id, exam.id).first();
         if (grant) accessible = true;
       }
-
       exams.push({ ...exam, question_count: qCount.cnt, attempt, accessible });
     }
-
     return json(exams);
   }
 
-  // GET /api/exams/:id/questions — get exam + questions (accessible users only)
+  // GET /api/exams/:id/questions
   if (method === 'GET' && path.match(/^\/\d+\/questions$/)) {
     const examId = parseInt(path.split('/')[1]);
     const exam = await db.prepare('SELECT * FROM exams WHERE id=?').bind(examId).first();
     if (!exam) return err('Exam not found', 404);
-
-    // Check access
     if (exam.is_premium && !user.is_admin) {
       const grant = await db.prepare('SELECT id FROM premium_access WHERE user_id=? AND exam_id=?').bind(user.id, examId).first();
       if (!grant) return err('Premium access required', 403);
     }
-
     const questions = await db.prepare('SELECT * FROM questions WHERE exam_id=? ORDER BY id').bind(examId).all();
-    // Strip correct_answer from questions sent to client
     const safeQuestions = questions.results.map(({ correct_answer, ...q }) => q);
     return json({ exam, questions: safeQuestions });
   }
 
-  // POST /api/exams/:id/submit — submit exam answers
+  // POST /api/exams/:id/submit
   if (method === 'POST' && path.match(/^\/\d+\/submit$/)) {
     const examId = parseInt(path.split('/')[1]);
-    const { answers } = body; // { questionId: 'A'|'B'|'C'|'D', ... }
+    const { answers } = body;
     if (!answers) return err('Answers required');
-
     const questions = await db.prepare('SELECT id,correct_answer FROM questions WHERE exam_id=?').bind(examId).all();
     if (!questions.results.length) return err('No questions found');
-
     let score = 0;
     const total = questions.results.length;
     const detailedAnswers = {};
-
     for (const q of questions.results) {
       const given = (answers[q.id] || '').toUpperCase();
       const correct = q.correct_answer.toUpperCase();
@@ -204,12 +194,10 @@ async function handleExams(method, path, body, db, user) {
       if (isCorrect) score++;
       detailedAnswers[q.id] = { given, correct, isCorrect };
     }
-
     const percentage = Math.round((score / total) * 100);
     const result = await db.prepare(
       'INSERT INTO exam_attempts (user_id,exam_id,score,total_questions,percentage,answers) VALUES (?,?,?,?,?,?)'
     ).bind(user.id, examId, score, total, percentage, JSON.stringify(detailedAnswers)).run();
-
     return json({ attemptId: result.meta.last_row_id, score, total, percentage, answers: detailedAnswers });
   }
 
@@ -252,45 +240,38 @@ async function handleAdmin(method, path, body, db, user) {
     return json({ message: 'Exam deleted' });
   }
 
-  // POST /api/admin/questions/bulk — upload CSV questions
+  // POST /api/admin/questions/bulk — CSV upload with image_url support
   if (method === 'POST' && path === '/questions/bulk') {
     const { exam_id, csv } = body;
     if (!exam_id || !csv) return err('exam_id and csv required');
-
     const lines = csv.trim().split('\n').filter(l => l.trim());
     let inserted = 0;
     const errors = [];
-
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-
-      // Parse CSV — handle quoted fields
       const cols = parseCSVLine(line);
-      if (cols.length < 6) { errors.push(`Line ${i+1}: need 6+ columns`); continue; }
-
+      if (cols.length < 6) { errors.push(`Line ${i+1}: need at least 6 columns`); continue; }
       const [question_text, option_a, option_b, option_c, option_d, correct_answer, image_url] = cols;
       const correct = correct_answer.trim().toUpperCase();
       if (!['A','B','C','D'].includes(correct)) { errors.push(`Line ${i+1}: correct_answer must be A/B/C/D`); continue; }
-
       try {
         await db.prepare(
           'INSERT INTO questions (exam_id,question_text,option_a,option_b,option_c,option_d,correct_answer,image_url) VALUES (?,?,?,?,?,?,?,?)'
-        ).bind(exam_id, question_text.trim(), option_a.trim(), option_b.trim(), option_c.trim(), option_d.trim(), correct, image_url?.trim() || null).run();
+        ).bind(exam_id, question_text.trim(), option_a.trim(), option_b.trim(), option_c.trim(), option_d.trim(), correct, image_url ? image_url.trim() : null).run();
         inserted++;
       } catch(e) { errors.push(`Line ${i+1}: ${e.message}`); }
     }
-
     return json({ inserted, errors });
   }
 
-  // GET /api/admin/users — all users
+  // GET /api/admin/users
   if (method === 'GET' && path === '/users') {
     const users = await db.prepare('SELECT id,name,email,is_admin,is_premium_allowed,created_at FROM users ORDER BY created_at DESC').all();
     return json(users.results);
   }
 
-  // POST /api/admin/grant-premium — grant exam access
+  // POST /api/admin/grant-premium
   if (method === 'POST' && path === '/grant-premium') {
     const { user_id, exam_id } = body;
     if (!user_id || !exam_id) return err('user_id and exam_id required');
@@ -308,7 +289,7 @@ async function handleAdmin(method, path, body, db, user) {
     return json({ message: 'Access revoked' });
   }
 
-  // GET /api/admin/results — all attempt results
+  // GET /api/admin/results — all results
   if (method === 'GET' && path === '/results') {
     const results = await db.prepare(`
       SELECT ea.*, u.name as user_name, u.email as user_email, e.name as exam_name
@@ -317,6 +298,20 @@ async function handleAdmin(method, path, body, db, user) {
       JOIN exams e ON ea.exam_id = e.id
       ORDER BY ea.submitted_at DESC
     `).all();
+    return json(results.results);
+  }
+
+  // GET /api/admin/results/:examId — results for specific exam
+  if (method === 'GET' && path.match(/^\/results\/\d+$/)) {
+    const examId = parseInt(path.split('/')[2]);
+    const results = await db.prepare(`
+      SELECT ea.*, u.name as user_name, u.email as user_email, e.name as exam_name
+      FROM exam_attempts ea
+      JOIN users u ON ea.user_id = u.id
+      JOIN exams e ON ea.exam_id = e.id
+      WHERE ea.exam_id = ?
+      ORDER BY ea.percentage DESC, ea.submitted_at DESC
+    `).bind(examId).all();
     return json(results.results);
   }
 
@@ -334,29 +329,12 @@ async function handleAdmin(method, path, body, db, user) {
   return err('Not found', 404);
 }
 
-// ── CSV line parser (handles quoted fields) ──
-function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') { inQuotes = !inQuotes; continue; }
-    if (ch === ',' && !inQuotes) { result.push(current); current = ''; continue; }
-    current += ch;
-  }
-  result.push(current);
-  return result;
-}
+// ═══ MAIN ENTRY ═══
 
-// ══════════════════════════════════════════════
-// MAIN ENTRY POINT
-// ══════════════════════════════════════════════
 export async function onRequest(context) {
   const { request, env } = context;
   const db = env.DB;
 
-  // CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS });
   }
@@ -373,7 +351,6 @@ export async function onRequest(context) {
 
   const user = await getUser(request);
 
-  // Route to handlers
   if (fullPath.startsWith('/auth/')) return handleAuth(request.method, fullPath.replace('/auth',''), body, db);
   if (fullPath.startsWith('/exams')) return handleExams(request.method, fullPath.replace('/exams','') || '/', body, db, user);
   if (fullPath.startsWith('/admin/')) return handleAdmin(request.method, fullPath.replace('/admin',''), body, db, user);
