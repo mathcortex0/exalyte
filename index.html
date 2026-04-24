@@ -3,94 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exalyte - Premium Exam Platform</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <title>English Learning Lab</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; }
+        .header { background: #1a1a2e; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .logo { font-size: 1.5rem; font-weight: bold; }
+        .logo span { color: #e67e22; }
+        .btn { padding: 0.5rem 1.5rem; border-radius: 8px; border: none; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn-outline { background: transparent; border: 1px solid #e67e22; color: #e67e22; }
+        .btn-primary { background: #e67e22; color: white; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .filters { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; justify-content: space-between; align-items: center; }
+        .filter-buttons { display: flex; gap: 0.5rem; }
+        .filter-btn { padding: 0.5rem 1rem; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+        .filter-btn.active { background: #e67e22; color: white; border-color: #e67e22; }
+        .search-box { padding: 0.5rem 1rem; border: 1px solid #ddd; border-radius: 8px; width: 250px; }
+        .articles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+        .article-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.2s; }
+        .article-card:hover { transform: translateY(-4px); }
+        .article-image { width: 100%; height: 180px; object-fit: cover; background: #ddd; }
+        .article-content { padding: 1rem; }
+        .article-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .article-excerpt { color: #666; font-size: 0.85rem; margin-bottom: 0.5rem; }
+        .article-meta { display: flex; justify-content: space-between; align-items: center; }
+        .badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .badge-free { background: #27ae60; color: white; }
+        .badge-premium { background: #e67e22; color: white; }
+        .user-badge { background: #e67e22; color: white; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.75rem; }
+        .footer { background: #1a1a2e; color: white; text-align: center; padding: 2rem; margin-top: 2rem; }
+        .footer a { color: #e67e22; }
+        @media (max-width: 768px) { .container { padding: 1rem; } .filters { flex-direction: column; } .search-box { width: 100%; } }
+    </style>
 </head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="bg-white rounded-lg p-8 text-center">
-            <div class="spinner"></div>
-            <p class="mt-4 text-gray-600">Loading...</p>
-        </div>
-    </div>
-    
-    <div class="container mx-auto px-4 py-12 max-w-md">
-        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-            <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-8 text-white text-center">
-                <img src="assets/logo.png" alt="Exalyte" class="h-20 mx-auto mb-4 bg-white rounded-full p-2" onerror="this.style.display='none'">
-                <i class="fas fa-graduation-cap text-5xl mb-4"></i>
-                <h1 class="text-3xl font-bold">Exalyte</h1>
-                <p class="text-blue-100 mt-2">Premium Exam Platform</p>
-            </div>
-            <div class="p-8">
-                <div class="flex gap-2 mb-6 border-b">
-                    <button id="loginTab" class="flex-1 py-2 font-semibold border-b-2 border-blue-600 text-blue-600">Login</button>
-                    <button id="signupTab" class="flex-1 py-2 font-semibold text-gray-500">Sign Up</button>
-                </div>
-                
-                <div id="loginForm">
-                    <div class="mb-4">
-                        <label class="block text-gray-700 font-semibold mb-2">Email</label>
-                        <input type="email" id="loginEmail" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="your@email.com">
-                    </div>
-                    <div class="mb-6">
-                        <label class="block text-gray-700 font-semibold mb-2">Password</label>
-                        <input type="password" id="loginPassword" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
-                    </div>
-                    <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">Login</button>
-                    <div class="relative my-6">
-                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t"></div></div>
-                        <div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">Or</span></div>
-                    </div>
-                    <button id="googleBtn" class="w-full bg-white border py-3 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
-                        <i class="fab fa-google text-red-500"></i>Sign in with Google
-                    </button>
-                </div>
-                
-                <div id="signupForm" class="hidden">
-                    <div class="mb-4">
-                        <label class="block text-gray-700 font-semibold mb-2">Full Name</label>
-                        <input type="text" id="signupName" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="John Doe">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-gray-700 font-semibold mb-2">Email</label>
-                        <input type="email" id="signupEmail" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="your@email.com">
-                    </div>
-                    <div class="mb-6">
-                        <label class="block text-gray-700 font-semibold mb-2">Password</label>
-                        <input type="password" id="signupPassword" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
-                    </div>
-                    <button id="signupBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition">Create Account</button>
-                </div>
-            </div>
-        </div>
+<body>
+    <div class="header">
+        <div class="logo">English <span>Learning Lab</span></div>
+        <div class="nav-buttons" id="navButtons"></div>
     </div>
 
-    <script src="js/config.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/auth.js"></script>
+    <div class="container">
+        <div class="filters">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="free">Free</button>
+                <button class="filter-btn" data-filter="premium">Premium</button>
+            </div>
+            <input type="text" class="search-box" id="searchInput" placeholder="Search articles...">
+        </div>
+        <div class="articles-grid" id="articlesGrid"></div>
+    </div>
+
+    <div class="footer">
+        <p>Contact on Telegram: <a href="https://t.me/adamzampas">@adamzampas</a></p>
+        <p>© 2024 English Learning Lab</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        document.getElementById('loginTab').onclick = () => {
-            document.getElementById('loginForm').classList.remove('hidden');
-            document.getElementById('signupForm').classList.add('hidden');
-            document.getElementById('loginTab').className = 'flex-1 py-2 font-semibold border-b-2 border-blue-600 text-blue-600';
-            document.getElementById('signupTab').className = 'flex-1 py-2 font-semibold text-gray-500';
-        };
-        document.getElementById('signupTab').onclick = () => {
-            document.getElementById('loginForm').classList.add('hidden');
-            document.getElementById('signupForm').classList.remove('hidden');
-            document.getElementById('signupTab').className = 'flex-1 py-2 font-semibold border-b-2 border-purple-600 text-purple-600';
-            document.getElementById('loginTab').className = 'flex-1 py-2 font-semibold text-gray-500';
-        };
-        document.getElementById('loginBtn').onclick = () => login(document.getElementById('loginEmail').value, document.getElementById('loginPassword').value);
-        document.getElementById('googleBtn').onclick = loginWithGoogle;
-        document.getElementById('signupBtn').onclick = () => signup(document.getElementById('signupEmail').value, document.getElementById('signupPassword').value, document.getElementById('signupName').value);
+        const SUPABASE_URL = 'https://noekogokjjptosipfile.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_TQRMwY2EqtZgAoyMqcSrlw_2TxPE7Lk';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        checkAuthAndRedirect();
+        let currentUser = null;
+        let currentFilter = 'all';
+        let currentSearch = '';
+
+        async function checkUser() {
+            const { data: { user } } = await supabase.auth.getUser();
+            currentUser = user;
+            
+            const navButtons = document.getElementById('navButtons');
+            
+            if (user) {
+                // Get user data from D1 via our API
+                const token = (await supabase.auth.getSession()).data.session?.access_token;
+                const res = await fetch('/api/auth/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const userData = await res.json();
+                
+                navButtons.innerHTML = `
+                    <span class="user-badge">${user.email} ${userData.subscription ? '⭐ Premium' : '📖 Free'} ${userData.role === 'admin' ? '👑 Admin' : ''}</span>
+                    <button onclick="logout()" class="btn btn-outline" style="margin-left: 10px;">Logout</button>
+                    ${userData.role === 'admin' ? '<a href="admin.html" class="btn btn-primary">Admin</a>' : ''}
+                `;
+            } else {
+                navButtons.innerHTML = `<a href="login.html" class="btn btn-outline">Sign In</a>`;
+            }
+        }
+
+        async function logout() {
+            await supabase.auth.signOut();
+            window.location.href = 'index.html';
+        }
+
+        async function loadArticles() {
+            let url = `/api/articles?filter=${currentFilter}`;
+            if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+            
+            const res = await fetch(url);
+            const articles = await res.json();
+            
+            const grid = document.getElementById('articlesGrid');
+            
+            if (!articles || articles.length === 0) {
+                grid.innerHTML = '<div style="text-align: center; padding: 2rem;">No articles found</div>';
+                return;
+            }
+            
+            grid.innerHTML = articles.map(article => `
+                <div class="article-card" onclick="openArticle('${article.slug}')">
+                    ${article.image_url ? `<img src="${article.image_url}" class="article-image">` : '<div class="article-image" style="display: flex; align-items: center; justify-content: center;">📖</div>'}
+                    <div class="article-content">
+                        <div class="article-title">${escapeHtml(article.title)}</div>
+                        <div class="article-excerpt">${escapeHtml(article.excerpt || article.content.substring(0, 100))}...</div>
+                        <div class="article-meta">
+                            <span class="badge ${article.is_free ? 'badge-free' : 'badge-premium'}">${article.is_free ? 'Free' : 'Premium'}</span>
+                            <span>👁️ ${article.view_count || 0} views</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function openArticle(slug) {
+            window.location.href = `article.html?slug=${slug}`;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                loadArticles();
+            });
+        });
+        
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            currentSearch = e.target.value;
+            loadArticles();
+        });
+        
+        checkUser();
+        loadArticles();
     </script>
 </body>
 </html>
