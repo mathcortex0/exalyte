@@ -3,87 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Dashboard - Exam System</title>
+    <title>Exams</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; background: #f0f2f5; }
-        .header { background: #1a1a2e; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .logo span { color: #e67e22; }
-        .btn { padding: 0.5rem 1.5rem; border-radius: 8px; border: none; cursor: pointer; }
-        .btn-outline { background: transparent; border: 1px solid #e67e22; color: #e67e22; }
-        .btn-primary { background: #e67e22; color: white; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-        .exam-card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        .badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; }
-        .badge-free { background: #27ae60; color: white; }
-        .badge-premium { background: #e67e22; color: white; }
-        .badge-locked { background: #e74c3c; color: white; }
-        .user-info { display: flex; gap: 1rem; align-items: center; }
-        @media (max-width: 768px) { .container { padding: 1rem; } }
+        body { font-family: system-ui; padding: 20px; }
+        .exam { background: #f0f2f5; padding: 20px; margin: 10px 0; border-radius: 10px; }
+        button { background: #e67e22; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">Exam <span>System</span></div>
-        <div id="userInfo" class="user-info"></div>
-    </div>
-    <div class="container">
-        <h2>Available Exams</h2>
-        <div id="examList"></div>
-    </div>
+    <h1>Available Exams</h1>
+    <div id="exams"></div>
 
     <script>
-        const user = JSON.parse(localStorage.getItem('exam_user') || 'null');
-        
-        if (!user) {
-            window.location.href = 'login.html';
-        }
-        
-        document.getElementById('userInfo').innerHTML = `
-            <span>Welcome, ${user.name}</span>
-            <button class="btn btn-outline" onclick="logout()">Logout</button>
-            ${user.is_admin ? '<button class="btn btn-primary" onclick="location.href=\'admin.html\'">Admin Panel</button>' : ''}
-        `;
+        const user = JSON.parse(localStorage.getItem('user') || 'null');
+        if (!user) window.location.href = 'login.html';
         
         async function loadExams() {
-            const res = await fetch('/api/exams', {
-                headers: { 'X-User-Data': JSON.stringify(user) }
-            });
+            const res = await fetch('/api/exams');
             const exams = await res.json();
-            
-            const examList = document.getElementById('examList');
-            
-            if (exams.length === 0) {
-                examList.innerHTML = '<p>No exams available.</p>';
-                return;
-            }
-            
-            examList.innerHTML = exams.map(exam => `
-                <div class="exam-card">
-                    <div>
-                        <h3>${exam.name}</h3>
-                        <p>${exam.description || 'No description'}</p>
-                        <span class="badge ${exam.is_premium ? 'badge-premium' : 'badge-free'}">${exam.is_premium ? 'Premium' : 'Free'}</span>
-                        <span>Time: ${Math.floor(exam.time_limit / 60)} minutes</span>
-                    </div>
-                    <div>
-                        ${exam.can_access ? 
-                            `<button class="btn btn-primary" onclick="startExam(${exam.id})">Start Exam</button>` :
-                            `<span class="badge badge-locked">🔒 Premium - Contact Admin</span>`
-                        }
-                    </div>
+            document.getElementById('exams').innerHTML = exams.map(e => `
+                <div class="exam">
+                    <h3>${e.name}</h3>
+                    <button onclick="startExam(${e.id})">Start</button>
                 </div>
             `).join('');
         }
         
-        function startExam(examId) {
-            localStorage.setItem('current_exam', examId);
+        function startExam(id) {
+            localStorage.setItem('exam_id', id);
             window.location.href = 'exam.html';
-        }
-        
-        function logout() {
-            localStorage.removeItem('exam_user');
-            window.location.href = 'login.html';
         }
         
         loadExams();
