@@ -6,15 +6,14 @@ export async function onRequest(context) {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-User-Data, X-Admin-Data'
+        'Access-Control-Allow-Headers': 'Content-Type'
     };
     
     if (request.method === 'OPTIONS') {
         return new Response(null, { headers });
     }
     
-    // ========== HELPER FUNCTIONS ==========
-    
+    // ========== HELPER: HASH PASSWORD ==========
     async function hashPassword(password) {
         const encoder = new TextEncoder();
         const data = encoder.encode(password);
@@ -22,16 +21,19 @@ export async function onRequest(context) {
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
     
+    // ========== HELPER: CHECK ADMIN ==========
     async function isAdmin(authHeader) {
         if (!authHeader) return false;
-        const userData = JSON.parse(authHeader);
-        const user = await env.DB.prepare('SELECT is_admin FROM users WHERE id = ?').bind(userData.id).all();
-        return user.results.length > 0 && user.results[0].is_admin === 1;
+        try {
+            const userData = JSON.parse(authHeader);
+            const user = await env.DB.prepare('SELECT is_admin FROM users WHERE id = ?').bind(userData.id).all();
+            return user.results.length > 0 && user.results[0].is_admin === 1;
+        } catch {
+            return false;
+        }
     }
     
-    // ========== AUTH ROUTES ==========
-    
-    // SIGNUP
+    // ========== SIGNUP ==========
     if (request.method === 'POST' && url.pathname === '/api/signup') {
         try {
             const { name, email, password } = await request.json();
@@ -41,7 +43,7 @@ export async function onRequest(context) {
             }
             
             if (password.length < 4) {
-                return new Response(JSON.stringify({ error: 'Password min 4 characters' }), { status: 400, headers });
+                return new Response(JSON.stringify({ error: 'Password must be at least 4 characters' }), { status: 400, headers });
             }
             
             const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).all();
@@ -67,7 +69,7 @@ export async function onRequest(context) {
         }
     }
     
-    // LOGIN
+    // ========== LOGIN ==========
     if (request.method === 'POST' && url.pathname === '/api/login') {
         try {
             const { email, password } = await request.json();
@@ -101,7 +103,7 @@ export async function onRequest(context) {
         }
     }
     
-    // CHANGE PASSWORD
+    // ========== CHANGE PASSWORD ==========
     if (request.method === 'POST' && url.pathname === '/api/change-password') {
         try {
             const { userId, oldPassword, newPassword } = await request.json();
@@ -127,9 +129,7 @@ export async function onRequest(context) {
         }
     }
     
-    // ========== EXAM ROUTES ==========
-    
-    // GET ALL EXAMS
+    // ========== GET ALL EXAMS ==========
     if (request.method === 'GET' && url.pathname === '/api/exams') {
         try {
             const authHeader = request.headers.get('X-User-Data');
@@ -137,9 +137,11 @@ export async function onRequest(context) {
             let isAdminUser = false;
             
             if (authHeader) {
-                const userData = JSON.parse(authHeader);
-                userId = userData.id;
-                isAdminUser = userData.is_admin === 1;
+                try {
+                    const userData = JSON.parse(authHeader);
+                    userId = userData.id;
+                    isAdminUser = userData.is_admin === 1;
+                } catch (e) {}
             }
             
             let exams;
@@ -162,11 +164,11 @@ export async function onRequest(context) {
             return new Response(JSON.stringify(exams.results), { headers });
             
         } catch (error) {
-            return new Response(JSON.stringify({ error: error.message }), { status: 500, headers });
+            return new Response(JSON.stringify([]), { headers });
         }
     }
     
-    // GET SINGLE EXAM WITH QUESTIONS
+    // ========== GET SINGLE EXAM WITH QUESTIONS ==========
     if (request.method === 'GET' && url.pathname.match(/\/api\/exam\/\d+$/)) {
         try {
             const examId = url.pathname.split('/').pop();
@@ -192,10 +194,10 @@ export async function onRequest(context) {
                     'SELECT * FROM premium_access WHERE user_id = ? AND exam_id = ?'
                 ).bind(userData.id, examId).all();
                 canAccess = access.results.length > 0;
-            }
-            
-            if (!canAccess) {
-                return new Response(JSON.stringify({ error: 'Premium access required. Contact admin.' }), { status: 403, headers });
+                
+                if (!canAccess && userData.is_admin !== 1) {
+                    return new Response(JSON.stringify({ error: 'Premium access required. Contact admin.' }), { status: 403, headers });
+                }
             }
             
             const questions = await env.DB.prepare(
@@ -212,7 +214,7 @@ export async function onRequest(context) {
         }
     }
     
-    // SUBMIT EXAM
+    // ========== SUBMIT EXAM ==========
     if (request.method === 'POST' && url.pathname.match(/\/api\/exam\/\d+\/submit$/)) {
         try {
             const examId = url.pathname.split('/')[3];
@@ -248,9 +250,7 @@ export async function onRequest(context) {
         }
     }
     
-    // ========== ADMIN ROUTES ==========
-    
-    // GET ALL USERS (Admin only)
+    // ========== ADMIN: GET ALL USERS ==========
     if (request.method === 'GET' && url.pathname === '/api/admin/users') {
         try {
             const authHeader = request.headers.get('X-Admin-Data');
@@ -266,7 +266,7 @@ export async function onRequest(context) {
         }
     }
     
-    // GRANT PREMIUM ACCESS (Admin only)
+    // ========== ADMIN: GRANT PREMIUM ACCESS ==========
     if (request.method === 'POST' && url.pathname === '/api/admin/grant-premium') {
         try {
             const authHeader = request.headers.get('X-Admin-Data');
@@ -277,9 +277,13 @@ export async function onRequest(context) {
             const { user_id, exam_id } = await request.json();
             const adminData = JSON.parse(authHeader);
             
-            await env.DB.prepare(
-                'INSERT INTO premium_access (user_id, exam_id, granted_by) VALUES (?, ?, ?)'
-            ).bind(user_id, exam_id, adminData.id).run();
+            // Check if already exists
+            const existing = await env.DB.prepare('SELECT id FROM premium_access WHERE user_id = ? AND exam_id = ?').bind(user_id, exam_id).all();
+            if (existing.results.length === 0) {
+                await env.DB.prepare(
+                    'INSERT INTO premium_access (user_id, exam_id, granted_by) VALUES (?, ?, ?)'
+                ).bind(user_id, exam_id, adminData.id).run();
+            }
             
             return new Response(JSON.stringify({ success: true }), { headers });
             
@@ -288,7 +292,7 @@ export async function onRequest(context) {
         }
     }
     
-    // CREATE EXAM (Admin only)
+    // ========== ADMIN: CREATE EXAM ==========
     if (request.method === 'POST' && url.pathname === '/api/admin/exam') {
         try {
             const authHeader = request.headers.get('X-Admin-Data');
@@ -300,7 +304,7 @@ export async function onRequest(context) {
             
             const result = await env.DB.prepare(
                 'INSERT INTO exams (name, description, time_limit, is_premium) VALUES (?, ?, ?, ?)'
-            ).bind(name, description, time_limit || 1800, is_premium || 0).run();
+            ).bind(name, description || '', time_limit || 1800, is_premium || 0).run();
             
             return new Response(JSON.stringify({ success: true, exam_id: result.meta.last_row_id }), { headers });
             
@@ -309,7 +313,7 @@ export async function onRequest(context) {
         }
     }
     
-    // UPLOAD CSV QUESTIONS (Admin only)
+    // ========== ADMIN: UPLOAD CSV ==========
     if (request.method === 'POST' && url.pathname === '/api/admin/upload-csv') {
         try {
             const authHeader = request.headers.get('X-Admin-Data');
@@ -323,13 +327,29 @@ export async function onRequest(context) {
             const csvText = await csvFile.text();
             
             const lines = csvText.trim().split('\n');
-            const headers_line = lines[0].split(',');
             
             let inserted = 0;
             
             for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',');
-                if (values.length < 7) continue;
+                const line = lines[i];
+                const values = [];
+                let inQuote = false;
+                let current = '';
+                
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"') {
+                        inQuote = !inQuote;
+                    } else if (char === ',' && !inQuote) {
+                        values.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                values.push(current);
+                
+                if (values.length < 6) continue;
                 
                 const question_text = values[0];
                 const option_a = values[1];
@@ -338,6 +358,8 @@ export async function onRequest(context) {
                 const option_d = values[4];
                 const correct_answer = values[5];
                 const image_url = values[6] || '';
+                
+                if (!question_text) continue;
                 
                 await env.DB.prepare(`
                     INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, image_url)
@@ -354,7 +376,7 @@ export async function onRequest(context) {
         }
     }
     
-    // GET ALL RESULTS (Admin only)
+    // ========== ADMIN: GET RESULTS ==========
     if (request.method === 'GET' && url.pathname === '/api/admin/results') {
         try {
             const authHeader = request.headers.get('X-Admin-Data');
@@ -377,7 +399,7 @@ export async function onRequest(context) {
         }
     }
     
-    // DELETE EXAM (Admin only)
+    // ========== ADMIN: DELETE EXAM ==========
     if (request.method === 'DELETE' && url.pathname.match(/\/api\/admin\/exam\/\d+$/)) {
         try {
             const authHeader = request.headers.get('X-Admin-Data');
@@ -399,5 +421,10 @@ export async function onRequest(context) {
         }
     }
     
-    return new Response('Not found', { status: 404 });
+    // ========== TEST ROUTE ==========
+    if (request.method === 'GET' && url.pathname === '/api/test') {
+        return new Response(JSON.stringify({ message: 'API is working!', db: !!env.DB }), { headers });
+    }
+    
+    return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers });
 }
